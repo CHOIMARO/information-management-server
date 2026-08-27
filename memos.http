@@ -1,0 +1,38 @@
+### 전체 메모 조회
+GET http://localhost:8080/memos
+
+### 메모 생성
+POST http://localhost:8080/memos
+Content-Type: application/json
+
+{
+  "title": "첫 메모",
+  "content": "서버에서 만든 첫 번째 메모입니다."
+}
+
+### 단건 조회 (id는 생성 응답의 값으로 바꿔서 실행)
+GET http://localhost:8080/memos/1
+
+### 메모 수정
+PUT http://localhost:8080/memos/1
+Content-Type: application/json
+
+{
+  "title": "수정된 제목",
+  "content": "내용도 수정했습니다."
+}
+
+### 메모 삭제
+DELETE http://localhost:8080/memos/1
+
+### [검증 실패 확인용] 빈 제목 → 400 INVALID_REQUEST
+POST http://localhost:8080/memos
+Content-Type: application/json
+
+{
+  "title": "",
+  "content": "제목이 비어 있음"
+}
+
+### [검증 실패 확인용] 없는 메모 조회 → 404 MEMO_NOT_FOUND
+GET http://localhost:8080/memos/999999

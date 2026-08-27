@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-26T10:07:16.209Z" hostname="maroui-MacBookPro.local" time="0.092">
+  <properties/>
+  <testcase name="없는 메모를 조회하면 MemoNotFoundException이 발생한다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.007"/>
+  <testcase name="없는 메모를 삭제하면 MemoNotFoundException이 발생한다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.001"/>
+  <testcase name="없는 메모를 수정하면 MemoNotFoundException이 발생한다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.0"/>
+  <testcase name="수정하면 제목과 내용은 바뀌지만 createdAt은 유지된다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.003"/>
+  <testcase name="생성하면 저장소에 저장을 요청하고 저장된 메모를 반환한다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.002"/>
+  <testcase name="삭제하면 저장소에 삭제를 요청한다()" classname="io.github.qkqnfld.information_management.memo.application.MemoServiceTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

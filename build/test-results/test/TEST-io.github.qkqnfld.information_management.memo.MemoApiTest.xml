@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.qkqnfld.information_management.memo.MemoApiTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-08-26T10:07:15.891Z" hostname="maroui-MacBookPro.local" time="0.318">
+  <properties/>
+  <testcase name="메모를 생성하면 201과 Location 헤더, 발급된 id를 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.108"/>
+  <testcase name="없는 메모를 조회하면 404와 MEMO_NOT_FOUND 코드를 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.02"/>
+  <testcase name="삭제한 메모를 다시 조회하면 404를 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.009"/>
+  <testcase name="빈 제목으로 생성하면 400과 필드 에러를 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.012"/>
+  <testcase name="id 자리에 문자열을 넣으면 400과 TYPE_MISMATCH 코드를 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.002"/>
+  <testcase name="필수 필드가 누락된 본문은 400을 응답한다()" classname="io.github.qkqnfld.information_management.memo.MemoApiTest" time="0.002"/>
+  <system-out><![CDATA[2026-08-26T19:07:15.892+09:00  INFO 42754 --- [information-management] [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [io.github.qkqnfld.information_management.memo.MemoApiTest]: MemoApiTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-26T19:07:15.897+09:00  INFO 42754 --- [information-management] [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration io.github.qkqnfld.information_management.InformationManagementApplication for test class io.github.qkqnfld.information_management.memo.MemoApiTest
+2026-08-26T19:07:15.897+09:00  INFO 42754 --- [information-management] [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [io.github.qkqnfld.information_management.memo.MemoApiTest]: MemoApiTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-26T19:07:15.898+09:00  INFO 42754 --- [information-management] [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration io.github.qkqnfld.information_management.InformationManagementApplication for test class io.github.qkqnfld.information_management.memo.MemoApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.1)
+
+2026-08-26T19:07:15.907+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : Starting MemoApiTest using Java 21.0.12.1 with PID 42754 (started by maro in /Users/maro/information-management)
+2026-08-26T19:07:15.907+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : No active profile set, falling back to 1 default profile: "default"
+2026-08-26T19:07:15.951+09:00  INFO 42754 --- [information-management] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-26T19:07:15.954+09:00  INFO 42754 --- [information-management] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 3 ms. Found 1 JPA repository interface.
+2026-08-26T19:07:15.977+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-08-26T19:07:15.984+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-26T19:07:15.984+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.pool.HikariPool        : HikariPool-2 - Added connection conn10: url=jdbc:h2:mem:testdb user=SA
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:h2:mem:testdb]
+	Database driver: H2 JDBC Driver
+	Database dialect: H2Dialect
+	Database version: 2.4.240
+	Default catalog/schema: TESTDB/PUBLIC
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: 100
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-26T19:07:15.995+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-26T19:07:15.996+09:00  INFO 42754 --- [information-management] [    Test worker] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-26T19:07:16.011+09:00  WARN 42754 --- [information-management] [    Test worker] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-26T19:07:16.042+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-08-26T19:07:16.042+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-08-26T19:07:16.043+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-08-26T19:07:16.052+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : Started MemoApiTest in 0.153 seconds (process running for 2.11)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

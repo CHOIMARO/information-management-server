@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=edge"/>
+<title>Test results - io.github.qkqnfld.information_management.memo.MemoApiTest</title>
+<link href="../css/base-style.css" rel="stylesheet" type="text/css"/>
+<link href="../css/style.css" rel="stylesheet" type="text/css"/>
+<script src="../js/report.js" type="text/javascript"></script>
+</head>
+<body>
+<div id="content">
+<div class="breadcrumbs">
+<a class="breadcrumb" href="../index.html">all</a> &gt; 
+<span class="breadcrumb">io.github.qkqnfld.information_management.memo.MemoApiTest</span>
+</div>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="successGroup" href="#">Gradle Test Run :test</a>
+</li>
+</ul>
+<div class="tab">
+<h2>Gradle Test Run :test</h2>
+<h1>MemoApiTest</h1>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="" href="#">summary</a>
+</li>
+<li>
+<a class="" href="#">standard output</a>
+</li>
+</ul>
+<div class="tab">
+<h2>summary</h2>
+<div>
+<div class="summary">
+<table>
+<tr>
+<td>
+<div class="summaryGroup">
+<table>
+<tr>
+<td>
+<div class="infoBox">
+<div class="counter">6</div>
+<p>tests</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>failures</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>skipped</p>
+</div>
+</td>
+<td>
+<div class="infoBox duration">
+<div class="counter">0.318s</div>
+<p>duration</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</td>
+<td>
+<div class="infoBox success successRate">
+<div class="percent">100%</div>
+<p>successful</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<table class="test-results sortable">
+<thead>
+<tr>
+<th>Child</th>
+<th hidden="">Name</th>
+<th data-sort-default="desc">Tests</th>
+<th data-sort-default="desc">Failures</th>
+<th data-sort-default="desc">Skipped</th>
+<th data-sort-default="desc">Duration</th>
+<th>Success rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="success">id 자리에 문자열을 넣으면 400과 TYPE_MISMATCH 코드를 응답한다()</td>
+<td class="path" hidden="">id 자리에 문자열을 넣으면 400과 TYPE_MISMATCH 코드를 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="2">0.002s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">메모를 생성하면 201과 Location 헤더, 발급된 id를 응답한다()</td>
+<td class="path" hidden="">메모를 생성하면 201과 Location 헤더, 발급된 id를 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="108">0.108s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">빈 제목으로 생성하면 400과 필드 에러를 응답한다()</td>
+<td class="path" hidden="">빈 제목으로 생성하면 400과 필드 에러를 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="12">0.012s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">삭제한 메모를 다시 조회하면 404를 응답한다()</td>
+<td class="path" hidden="">삭제한 메모를 다시 조회하면 404를 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="9">0.009s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">없는 메모를 조회하면 404와 MEMO_NOT_FOUND 코드를 응답한다()</td>
+<td class="path" hidden="">없는 메모를 조회하면 404와 MEMO_NOT_FOUND 코드를 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="20">0.020s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">필수 필드가 누락된 본문은 400을 응답한다()</td>
+<td class="path" hidden="">필수 필드가 누락된 본문은 400을 응답한다()</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="2">0.002s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="tab">
+<h2>standard output</h2>
+<span class="code">
+<pre id="root-0-test-stdout-io.github.qkqnfld.information_management.memo.MemoApiTest">2026-08-26T19:07:15.892+09:00  INFO 42754 --- [information-management] [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [io.github.qkqnfld.information_management.memo.MemoApiTest]: MemoApiTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-26T19:07:15.897+09:00  INFO 42754 --- [information-management] [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration io.github.qkqnfld.information_management.InformationManagementApplication for test class io.github.qkqnfld.information_management.memo.MemoApiTest
+2026-08-26T19:07:15.897+09:00  INFO 42754 --- [information-management] [    Test worker] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [io.github.qkqnfld.information_management.memo.MemoApiTest]: MemoApiTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-26T19:07:15.898+09:00  INFO 42754 --- [information-management] [    Test worker] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration io.github.qkqnfld.information_management.InformationManagementApplication for test class io.github.qkqnfld.information_management.memo.MemoApiTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v4.1.1)
+
+2026-08-26T19:07:15.907+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : Starting MemoApiTest using Java 21.0.12.1 with PID 42754 (started by maro in /Users/maro/information-management)
+2026-08-26T19:07:15.907+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : No active profile set, falling back to 1 default profile: &quot;default&quot;
+2026-08-26T19:07:15.951+09:00  INFO 42754 --- [information-management] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-26T19:07:15.954+09:00  INFO 42754 --- [information-management] [    Test worker] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 3 ms. Found 1 JPA repository interface.
+2026-08-26T19:07:15.977+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-08-26T19:07:15.984+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-26T19:07:15.984+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.pool.HikariPool        : HikariPool-2 - Added connection conn10: url=jdbc:h2:mem:testdb user=SA
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-08-26T19:07:15.985+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:h2:mem:testdb]
+	Database driver: H2 JDBC Driver
+	Database dialect: H2Dialect
+	Database version: 2.4.240
+	Default catalog/schema: TESTDB/PUBLIC
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: 100
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-26T19:07:15.995+09:00  INFO 42754 --- [information-management] [    Test worker] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-26T19:07:15.996+09:00  INFO 42754 --- [information-management] [    Test worker] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-26T19:07:16.011+09:00  WARN 42754 --- [information-management] [    Test worker] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-26T19:07:16.042+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-08-26T19:07:16.042+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-08-26T19:07:16.043+09:00  INFO 42754 --- [information-management] [    Test worker] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 0 ms
+2026-08-26T19:07:16.052+09:00  INFO 42754 --- [information-management] [    Test worker] i.g.q.i.memo.MemoApiTest                 : Started MemoApiTest in 0.153 seconds (process running for 2.11)
+</pre>
+<button class="clipboard-copy-btn" aria-label="Copy to clipboard" data-copy-element-id="root-0-test-stdout-io.github.qkqnfld.information_management.memo.MemoApiTest">Copy</button>
+</span>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<p>
+<div>
+<label class="hidden" id="label-for-line-wrapping-toggle" for="line-wrapping-toggle">Wrap lines
+<input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
+</label>
+</div>Generated by 
+<a href="https://www.gradle.org">Gradle 9.7.1</a> at 2026. 8. 26. 오후 7:07:16</p>
+</div>
+</div>
+</body>
+</html>
