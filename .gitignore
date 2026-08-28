@@ -12,6 +12,8 @@
 
 # Package Files #
 *.jar
+# 단, Gradle 래퍼 JAR은 예외 — 이게 없으면 CI 등 다른 환경에서 ./gradlew가 실행되지 않는다
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
