@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>information-management API 테스트</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    margin: 0; background: #f4f5f7; color: #222; font-size: 14px;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0 16px; }
+  h2 { font-size: 15px; margin: 0 0 12px; border-bottom: 2px solid #e2e4e8; padding-bottom: 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #fff; border: 1px solid #e2e4e8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: #666; margin: 8px 0 2px; }
+  input, textarea, select {
+    width: 100%; padding: 7px 9px; border: 1px solid #ccd0d6; border-radius: 5px;
+    font-size: 14px; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 56px; }
+  button {
+    padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer;
+    font-size: 13px; background: #2f6fed; color: #fff; margin: 10px 6px 0 0;
+  }
+  button.secondary { background: #6b7280; }
+  button.danger { background: #d9534f; }
+  button.small { padding: 3px 9px; font-size: 12px; margin: 0 3px 0 0; }
+  button:hover { filter: brightness(1.1); }
+  .token-state { font-size: 12px; line-height: 1.7; word-break: break-all; }
+  .token-state b { display: inline-block; min-width: 84px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .badge.on { background: #d9f2e2; color: #157347; }
+  .badge.off { background: #f2d9d9; color: #b02a37; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eceef1; vertical-align: top; }
+  th { font-size: 12px; color: #666; }
+  .tag { display: inline-block; background: #eef2fe; color: #2f6fed; border-radius: 3px; padding: 0 6px; font-size: 12px; margin: 0 3px 2px 0; }
+  #log {
+    background: #191c22; color: #cdd3dd; border-radius: 8px; padding: 12px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+    max-height: 480px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  #log .entry { border-bottom: 1px solid #2c313b; padding: 6px 0; }
+  #log .ok { color: #6fd08c; }
+  #log .err { color: #ef8683; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  .muted { color: #888; font-size: 12px; }
+  .inline-note { font-size: 12px; color: #888; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>information-management API 테스트</h1>
+
+  <!-- ===== 토큰 상태 ===== -->
+  <div class="card">
+    <h2>토큰 상태</h2>
+    <div class="token-state">
+      <div>로그인 상태: <span id="authBadge" class="badge off">로그아웃</span> <span id="whoami" class="muted"></span></div>
+      <div><b>accessToken</b> <span id="accessTokenView" class="muted">(없음)</span></div>
+      <div><b>refreshToken</b> <span id="refreshTokenView" class="muted">(없음)</span></div>
+    </div>
+    <button onclick="me()">내 정보 조회 (GET /members/me)</button>
+    <button onclick="refresh()" class="secondary">토큰 재발급 (POST /auth/refresh)</button>
+    <button onclick="logout()" class="danger">로그아웃 (POST /auth/logout)</button>
+    <button onclick="expireAccessToken()" class="secondary">access 토큰 훼손 (401 테스트)</button>
+    <div class="inline-note">
+      ‘access 토큰 훼손’은 저장된 access 토큰을 일부러 망가뜨립니다.
+      이후 인증 필요한 API를 호출하면 401이 나고, ‘재발급’으로 복구되는 흐름을 테스트할 수 있습니다.
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <!-- ===== 회원가입 ===== -->
+      <div class="card">
+        <h2>회원가입 (POST /members)</h2>
+        <label>이메일</label>
+        <input id="signupEmail" type="email" placeholder="user@example.com">
+        <label>비밀번호 (8~64자)</label>
+        <input id="signupPassword" type="password" placeholder="password123">
+        <label>닉네임 (20자 이하)</label>
+        <input id="signupNickname" placeholder="마로">
+        <button onclick="signup()">가입하기</button>
+      </div>
+
+      <!-- ===== 로그인 ===== -->
+      <div class="card">
+        <h2>로그인 (POST /auth/login)</h2>
+        <label>이메일</label>
+        <input id="loginEmail" type="email" placeholder="user@example.com">
+        <label>비밀번호</label>
+        <input id="loginPassword" type="password" placeholder="password123">
+        <button onclick="login()">로그인</button>
+      </div>
+
+      <!-- ===== SNS 로그인 / 계정 연동 ===== -->
+      <div class="card">
+        <h2>SNS 로그인 / 계정 연동</h2>
+        <label>SNS 인증 결과 사용처</label>
+        <div style="margin:4px 0 10px;">
+          <label style="display:inline;font-size:13px;color:#222;">
+            <input type="radio" name="snsMode" value="login" checked style="width:auto;"> 로그인 (POST /auth/login/…)
+          </label>
+          <label style="display:inline;font-size:13px;color:#222;margin-left:12px;">
+            <input type="radio" name="snsMode" value="link"> 현재 계정에 연동 (POST /members/me/links/…)
+          </label>
+        </div>
+        <div class="inline-note" style="margin:0 0 10px;">
+          로그인/연동 모두 SNS 토큰을 얻는 과정은 같고, 보내는 엔드포인트만 다릅니다.
+          '연동'은 로그인된 상태에서만 가능합니다.
+          이미 같은 이메일의 계정이 있는데 SNS로 처음 로그인하면 서버가 409
+          (SOCIAL_EMAIL_CONFLICT)로 거절합니다 — 그 경우 기존 방식으로 로그인 후 '연동'을 쓰세요.
+        </div>
+        <label>카카오 REST API 키</label>
+        <input id="kakaoRestKey" placeholder="카카오 developers → 앱 키 → REST API 키">
+        <button onclick="kakaoLogin()" style="background:#FEE500;color:#191919;">카카오로 로그인</button>
+        <div class="inline-note">
+          카카오 developers에 등록해야 하는 Redirect URI: <b id="kakaoRedirectUriView"></b><br>
+          (플랫폼 Web 등록 + 카카오 로그인 활성화 + 위 Redirect URI 등록 필요.
+          보안 설정의 Client Secret은 '사용 안 함'이어야 합니다)
+        </div>
+        <hr style="border:none;border-top:1px solid #eceef1;margin:14px 0;">
+        <label>구글 웹 클라이언트 ID</label>
+        <input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com">
+        <button onclick="initGoogleButton()">구글 로그인 버튼 불러오기</button>
+        <div id="googleBtnContainer" style="margin-top:10px;"></div>
+        <div class="inline-note">
+          Google Cloud Console에서 '웹 애플리케이션' 타입 OAuth 클라이언트 ID를 만들고,
+          승인된 JavaScript 원본에 <b id="googleOriginView"></b> 을 추가해야 합니다.
+          (안드로이드용 클라이언트 ID는 웹에서 쓸 수 없습니다)
+        </div>
+        <hr style="border:none;border-top:1px solid #eceef1;margin:14px 0;">
+        <label>SNS 토큰 직접 입력 (카카오 access 토큰 또는 구글 idToken)</label>
+        <input id="manualSnsToken" placeholder="다른 경로로 발급받은 토큰을 붙여넣어 서버 검증만 테스트">
+        <button onclick="manualSnsLogin('kakao')" class="secondary">카카오로 서버 검증</button>
+        <button onclick="manualSnsLogin('google')" class="secondary">구글로 서버 검증</button>
+      </div>
+
+      <!-- ===== 로그인 수단 관리 ===== -->
+      <div class="card">
+        <h2>로그인 수단 관리 (GET /members/me)</h2>
+        <button onclick="loadProviders()" style="margin-top:0;">연결된 수단 조회</button>
+        <div id="providerList" class="muted" style="margin-top:10px;">아직 조회 전</div>
+        <div class="inline-note">
+          해제는 DELETE /members/me/links/{provider}.
+          마지막 남은 수단은 409(LAST_LOGIN_METHOD)로 거절되고,
+          연결 안 된 수단 해제는 404(CREDENTIAL_NOT_FOUND)가 납니다.
+        </div>
+      </div>
+
+      <!-- ===== 메모 작성/수정 ===== -->
+      <div class="card">
+        <h2>메모 작성 / 수정</h2>
+        <label>메모 ID (수정할 때만 입력, 비우면 새로 작성)</label>
+        <input id="memoId" type="number" placeholder="비워두면 POST /memos, 채우면 PUT /memos/{id}">
+        <label>제목 (200자 이하)</label>
+        <input id="memoTitle" placeholder="제목">
+        <label>내용 (4000자 이하)</label>
+        <textarea id="memoContent" placeholder="내용"></textarea>
+        <label>태그 (쉼표로 구분, 최대 10개)</label>
+        <input id="memoTags" placeholder="회의, 아이디어">
+        <button onclick="saveMemo()">저장</button>
+        <button onclick="clearMemoForm()" class="secondary">폼 비우기</button>
+      </div>
+    </div>
+
+    <div>
+      <!-- ===== 메모 목록 ===== -->
+      <div class="card">
+        <h2>메모 목록 (GET /memos)</h2>
+        <div class="row">
+          <div><label>keyword</label><input id="searchKeyword" placeholder="제목/내용 검색"></div>
+          <div><label>tag</label><input id="searchTag" placeholder="태그명"></div>
+        </div>
+        <div class="row">
+          <div><label>page</label><input id="searchPage" type="number" value="0" min="0"></div>
+          <div><label>size</label><input id="searchSize" type="number" value="20" min="1"></div>
+          <div><label>sort</label>
+            <select id="searchSort">
+              <option value="">기본 (id,desc)</option>
+              <option value="id,asc">id,asc (오래된 순)</option>
+              <option value="title,asc">title,asc</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="loadMemos()">목록 조회</button>
+        <div id="pageInfo" class="muted" style="margin-top:8px;"></div>
+        <table>
+          <thead><tr><th>ID</th><th>제목</th><th>태그</th><th>작성일</th><th></th></tr></thead>
+          <tbody id="memoList"><tr><td colspan="5" class="muted">아직 조회 전</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- ===== 태그 목록 ===== -->
+      <div class="card">
+        <h2>태그 목록 (GET /tags)</h2>
+        <button onclick="loadTags()" style="margin-top:0;">태그 조회</button>
+        <div id="tagList" style="margin-top:10px;" class="muted">아직 조회 전</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 로그 ===== -->
+  <div class="card">
+    <h2>요청/응답 로그 <button onclick="document.getElementById('log').innerHTML=''" class="small secondary" style="float:right;">비우기</button></h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 토큰 저장소 (localStorage)
+// ============================================================
+const store = {
+  get access() { return localStorage.getItem('accessToken'); },
+  get refresh() { return localStorage.getItem('refreshToken'); },
+  save(tokens) {
+    localStorage.setItem('accessToken', tokens.accessToken);
+    localStorage.setItem('refreshToken', tokens.refreshToken);
+    renderTokenState();
+  },
+  clear() {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    renderTokenState();
+  },
+};
+
+function decodeJwtPayload(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(decodeURIComponent(escape(atob(base64))));
+  } catch { return null; }
+}
+
+function renderTokenState() {
+  const access = store.access, refresh = store.refresh;
+  const badge = document.getElementById('authBadge');
+  const who = document.getElementById('whoami');
+  if (access) {
+    badge.textContent = '토큰 있음';
+    badge.className = 'badge on';
+    const payload = decodeJwtPayload(access);
+    who.textContent = payload
+      ? `(memberId=${payload.sub}, 만료=${new Date(payload.exp * 1000).toLocaleString()})`
+      : '(access 토큰 디코딩 실패 — 훼손 상태일 수 있음)';
+  } else {
+    badge.textContent = '로그아웃';
+    badge.className = 'badge off';
+    who.textContent = '';
+  }
+  document.getElementById('accessTokenView').textContent = access ? access.slice(0, 40) + '…' : '(없음)';
+  document.getElementById('refreshTokenView').textContent = refresh ? refresh.slice(0, 40) + '…' : '(없음)';
+}
+
+// ============================================================
+// 공통 API 호출 + 로그
+// ============================================================
+async function api(method, path, body, { auth = true } = {}) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (auth && store.access) headers['Authorization'] = 'Bearer ' + store.access;
+
+  let res, data = null;
+  try {
+    res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const text = await res.text();
+    data = text ? JSON.parse(text) : null; // 204 No Content 대응
+  } catch (e) {
+    log(method, path, null, '서버에 연결할 수 없습니다: ' + e.message);
+    throw e;
+  }
+  log(method, path, res.status, data);
+  return { status: res.status, ok: res.ok, data };
+}
+
+function log(method, path, status, data) {
+  const el = document.getElementById('log');
+  const time = new Date().toLocaleTimeString();
+  const cls = status === null || status >= 400 ? 'err' : 'ok';
+  const statusText = status === null ? 'FAIL' : status;
+  const bodyText = data === null ? '(본문 없음)' : JSON.stringify(data, null, 2);
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  entry.innerHTML = `<span class="${cls}">[${time}] ${method} ${path} → ${statusText}</span>\n${escapeHtml(bodyText)}`;
+  el.prepend(entry);
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ============================================================
+// 인증
+// ============================================================
+async function signup() {
+  const body = {
+    email: document.getElementById('signupEmail').value,
+    password: document.getElementById('signupPassword').value,
+    nickname: document.getElementById('signupNickname').value,
+  };
+  const res = await api('POST', '/members', body, { auth: false });
+  if (res.ok) {
+    // 가입한 계정으로 바로 로그인해볼 수 있게 로그인 폼에 복사
+    document.getElementById('loginEmail').value = body.email;
+    document.getElementById('loginPassword').value = body.password;
+    alert(`가입 완료 (id=${res.data.id}). 로그인 폼에 이메일/비밀번호를 채워뒀습니다.`);
+  }
+}
+
+async function login() {
+  const body = {
+    email: document.getElementById('loginEmail').value,
+    password: document.getElementById('loginPassword').value,
+  };
+  const res = await api('POST', '/auth/login', body, { auth: false });
+  if (res.ok) { store.save(res.data); loadProviders(); }
+}
+
+async function me() {
+  await api('GET', '/members/me');
+}
+
+async function refresh() {
+  if (!store.refresh) { alert('refresh 토큰이 없습니다. 먼저 로그인하세요.'); return; }
+  const res = await api('POST', '/auth/refresh', { refreshToken: store.refresh }, { auth: false });
+  if (res.ok) store.save(res.data);
+  else if (res.status === 401) { store.clear(); alert('refresh 토큰이 무효/만료되었습니다. 다시 로그인하세요.'); }
+}
+
+async function logout() {
+  if (!store.refresh) { store.clear(); return; }
+  const res = await api('POST', '/auth/logout', { refreshToken: store.refresh }, { auth: false });
+  if (res.status === 204) {
+    store.clear();
+    document.getElementById('providerList').textContent = '아직 조회 전';
+  }
+}
+
+/** access 토큰 끝을 훼손해서 서명 검증 실패(401)를 재현한다 */
+function expireAccessToken() {
+  const access = store.access;
+  if (!access) { alert('access 토큰이 없습니다.'); return; }
+  localStorage.setItem('accessToken', access.slice(0, -8) + 'INVALID!');
+  renderTokenState();
+  alert('access 토큰을 훼손했습니다. 이제 메모 조회 등을 호출하면 401이 발생합니다.');
+}
+
+// ============================================================
+// SNS 로그인 / 계정 연동 (카카오 / 구글)
+// ============================================================
+/** 라디오에서 현재 선택된 SNS 인증 결과 사용처를 읽는다: 'login' | 'link' */
+function snsMode() {
+  return document.querySelector('input[name="snsMode"]:checked').value;
+}
+
+/**
+ * 획득한 SNS 토큰을 모드에 따라 라우팅한다.
+ * 토큰을 얻는 과정(카카오 리다이렉트/구글 버튼/직접 입력)은 동일하고,
+ * 로그인이냐 연동이냐는 보내는 엔드포인트의 차이일 뿐이다.
+ */
+async function submitSnsToken(provider, token, mode = snsMode()) {
+  if (mode === 'link') {
+    if (!store.access) { alert('연동은 로그인된 상태에서만 가능합니다. 먼저 로그인하세요.'); return; }
+    const r = await api('POST', `/members/me/links/${provider}`, { token });
+    if (r.status === 204) { alert(provider + ' 연동 완료'); loadProviders(); }
+  } else {
+    const r = await api('POST', `/auth/login/${provider}`, { token }, { auth: false });
+    if (r.ok) { store.save(r.data); loadProviders(); }
+  }
+}
+// 인가 후 카카오가 브라우저를 되돌려보낼 주소. 카카오 developers에 등록한 값과
+// 문자 단위로 정확히 일치해야 한다 (불일치 시 KOE006 에러).
+const KAKAO_REDIRECT_URI = location.origin + '/test.html';
+
+/** 카카오 인가 페이지로 이동한다 (Authorization Code 흐름의 1단계). */
+function kakaoLogin() {
+  const restKey = document.getElementById('kakaoRestKey').value.trim();
+  if (!restKey) { alert('카카오 REST API 키를 입력하세요.'); return; }
+  if (snsMode() === 'link' && !store.access) {
+    alert('연동은 로그인된 상태에서만 가능합니다. 먼저 로그인하세요.');
+    return;
+  }
+  localStorage.setItem('kakaoRestKey', restKey);
+  // 리다이렉트로 페이지가 새로 로드되면 라디오 선택이 초기화되므로 모드를 보존한다
+  sessionStorage.setItem('kakaoSnsMode', snsMode());
+  location.href = 'https://kauth.kakao.com/oauth/authorize?' + new URLSearchParams({
+    client_id: restKey,
+    redirect_uri: KAKAO_REDIRECT_URI,
+    response_type: 'code',
+  });
+}
+
+/**
+ * 카카오에서 ?code=로 돌아온 경우: 인가 코드 → 카카오 access 토큰 교환 →
+ * 우리 서버 로그인. 앱에서는 SDK가 토큰까지 만들어 주지만, 웹 테스트에서는
+ * 이 REST 교환 단계를 페이지가 대신한다.
+ */
+async function handleKakaoRedirect() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('error')) {
+    log('KAKAO', 'authorize', null, '카카오 인가 실패: ' + (params.get('error_description') || params.get('error')));
+    history.replaceState(null, '', location.pathname);
+    return;
+  }
+  const code = params.get('code');
+  if (!code) return;
+  // 인가 코드는 1회용이므로 새로고침 시 재사용되지 않게 주소에서 지운다
+  history.replaceState(null, '', location.pathname);
+
+  const restKey = localStorage.getItem('kakaoRestKey');
+  if (!restKey) { alert('카카오 REST API 키가 저장되어 있지 않습니다. 키 입력 후 다시 시도하세요.'); return; }
+
+  let res, data;
+  try {
+    res = await fetch('https://kauth.kakao.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: restKey,
+        redirect_uri: KAKAO_REDIRECT_URI,
+        code,
+      }),
+    });
+    data = await res.json();
+  } catch (e) {
+    log('POST', 'kauth.kakao.com/oauth/token', null, '토큰 교환 실패: ' + e.message);
+    return;
+  }
+  log('POST', 'kauth.kakao.com/oauth/token', res.status, data);
+  if (!res.ok) return;
+
+  const mode = sessionStorage.getItem('kakaoSnsMode') || 'login';
+  sessionStorage.removeItem('kakaoSnsMode');
+  await submitSnsToken('kakao', data.access_token, mode);
+}
+
+/** 구글 GIS 스크립트를 로드하고 공식 로그인 버튼을 렌더링한다. */
+function initGoogleButton() {
+  const clientId = document.getElementById('googleClientId').value.trim();
+  if (!clientId) { alert('구글 웹 클라이언트 ID를 입력하세요.'); return; }
+  localStorage.setItem('googleClientId', clientId);
+
+  const render = () => {
+    google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCredential });
+    google.accounts.id.renderButton(document.getElementById('googleBtnContainer'),
+      { type: 'standard', size: 'large', text: 'signin_with' });
+  };
+  if (window.google?.accounts?.id) { render(); return; }
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.onload = render;
+  script.onerror = () => alert('구글 GIS 스크립트 로드에 실패했습니다. 네트워크를 확인하세요.');
+  document.head.appendChild(script);
+}
+
+/** 구글 버튼 인증 완료 콜백. credential이 서버가 검증할 idToken(JWT)이다. */
+async function onGoogleCredential(response) {
+  await submitSnsToken('google', response.credential);
+}
+
+/** 이미 갖고 있는 SNS 토큰으로 서버 검증만 테스트한다 (OAuth 콘솔 설정 없이 사용 가능). */
+async function manualSnsLogin(provider) {
+  const token = document.getElementById('manualSnsToken').value.trim();
+  if (!token) { alert('토큰을 입력하세요.'); return; }
+  await submitSnsToken(provider, token);
+}
+
+// ============================================================
+// 로그인 수단 관리
+// ============================================================
+/** 내 정보를 조회해 연결된 로그인 수단을 해제 버튼과 함께 표시한다. */
+async function loadProviders() {
+  const el = document.getElementById('providerList');
+  if (!store.access) { el.textContent = '로그인 후 조회할 수 있습니다.'; return; }
+  const res = await api('GET', '/members/me');
+  if (!res.ok) { el.textContent = `조회 실패 (${res.status})`; return; }
+  const m = res.data;
+  el.innerHTML =
+    `<div class="muted" style="margin-bottom:6px;">${escapeHtml(m.nickname)} (id=${m.id}${m.email ? ', ' + escapeHtml(m.email) : ''})</div>` +
+    m.providers.map(p =>
+      `<span class="tag">${p}</span><button class="small danger" onclick="unlinkProvider('${p}')" style="margin-right:10px;">해제</button>`
+    ).join('');
+}
+
+async function unlinkProvider(provider) {
+  if (!confirm(provider + ' 로그인 수단을 해제할까요?')) return;
+  const res = await api('DELETE', '/members/me/links/' + provider);
+  if (res.status === 204) loadProviders();
+}
+
+/** 저장된 SNS 키를 폼에 복원하고, 등록에 필요한 주소들을 표시한다. */
+function restoreSnsSettings() {
+  document.getElementById('kakaoRedirectUriView').textContent = KAKAO_REDIRECT_URI;
+  document.getElementById('googleOriginView').textContent = location.origin;
+  const kakaoKey = localStorage.getItem('kakaoRestKey');
+  const googleId = localStorage.getItem('googleClientId');
+  if (kakaoKey) document.getElementById('kakaoRestKey').value = kakaoKey;
+  if (googleId) {
+    document.getElementById('googleClientId').value = googleId;
+    initGoogleButton(); // 클라이언트 ID가 저장돼 있으면 버튼을 바로 띄운다
+  }
+}
+
+// ============================================================
+// 메모
+// ============================================================
+async function saveMemo() {
+  const id = document.getElementById('memoId').value.trim();
+  const body = {
+    title: document.getElementById('memoTitle').value,
+    content: document.getElementById('memoContent').value,
+    tags: document.getElementById('memoTags').value.split(',').map(t => t.trim()).filter(t => t),
+  };
+  const res = id
+    ? await api('PUT', `/memos/${id}`, body)
+    : await api('POST', '/memos', body);
+  if (res.ok) {
+    clearMemoForm();
+    loadMemos();
+    loadTags();
+  }
+}
+
+function clearMemoForm() {
+  ['memoId', 'memoTitle', 'memoContent', 'memoTags'].forEach(id => document.getElementById(id).value = '');
+}
+
+async function loadMemos() {
+  const params = new URLSearchParams();
+  const keyword = document.getElementById('searchKeyword').value.trim();
+  const tag = document.getElementById('searchTag').value.trim();
+  const sort = document.getElementById('searchSort').value;
+  if (keyword) params.set('keyword', keyword);
+  if (tag) params.set('tag', tag);
+  if (sort) params.set('sort', sort);
+  params.set('page', document.getElementById('searchPage').value || 0);
+  params.set('size', document.getElementById('searchSize').value || 20);
+
+  const res = await api('GET', '/memos?' + params.toString());
+  const tbody = document.getElementById('memoList');
+  const info = document.getElementById('pageInfo');
+  if (!res.ok) { tbody.innerHTML = `<tr><td colspan="5" class="muted">조회 실패 (${res.status})</td></tr>`; info.textContent = ''; return; }
+
+  const page = res.data;
+  info.textContent = `page ${page.page} / 전체 ${page.totalElements}건 · ${page.totalPages}페이지 · hasNext=${page.hasNext}`;
+  if (page.content.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">메모 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = page.content.map(m => `
+    <tr>
+      <td>${m.id}</td>
+      <td>${escapeHtml(m.title)}</td>
+      <td>${m.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</td>
+      <td class="muted">${m.createdAt.replace('T', ' ').slice(0, 16)}</td>
+      <td>
+        <button class="small" onclick="viewMemo(${m.id})">상세</button>
+        <button class="small secondary" onclick="editMemo(${m.id})">수정</button>
+        <button class="small danger" onclick="deleteMemo(${m.id})">삭제</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function viewMemo(id) {
+  await api('GET', `/memos/${id}`); // 결과는 로그 패널에서 확인
+}
+
+async function editMemo(id) {
+  const res = await api('GET', `/memos/${id}`);
+  if (!res.ok) return;
+  document.getElementById('memoId').value = res.data.id;
+  document.getElementById('memoTitle').value = res.data.title;
+  document.getElementById('memoContent').value = res.data.content;
+  document.getElementById('memoTags').value = res.data.tags.join(', ');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteMemo(id) {
+  if (!confirm(`메모 ${id}번을 삭제할까요?`)) return;
+  const res = await api('DELETE', `/memos/${id}`);
+  if (res.status === 204) { loadMemos(); loadTags(); }
+}
+
+// ============================================================
+// 태그
+// ============================================================
+async function loadTags() {
+  const res = await api('GET', '/tags');
+  const el = document.getElementById('tagList');
+  if (!res.ok) { el.textContent = `조회 실패 (${res.status})`; return; }
+  el.innerHTML = res.data.length === 0
+    ? '<span class="muted">태그 없음</span>'
+    : res.data.map(t => `<span class="tag">${escapeHtml(t.name)} (${t.memoCount})</span>`).join(' ');
+}
+
+renderTokenState();
+restoreSnsSettings();
+handleKakaoRedirect();
+if (store.access) loadProviders(); // 로그인 상태로 페이지를 열면 연결된 수단을 바로 보여준다
+</script>
+</body>
+</html>

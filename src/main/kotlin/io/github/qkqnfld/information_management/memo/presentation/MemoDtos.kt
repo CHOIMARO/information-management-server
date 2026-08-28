@@ -17,6 +17,13 @@ data class MemoRequest(
 
     @field:Size(max = 4000, message = "내용은 4000자 이하여야 합니다")
     val content: String,
+
+    /**
+     * 붙일 태그 이름 목록 (생략 가능). 없는 태그는 서버가 만들어서 연결한다.
+     * 리스트 안쪽의 @Size는 컨테이너 요소 검증: 각 이름의 길이를 개별 검사한다.
+     */
+    @field:Size(max = 10, message = "태그는 10개 이하여야 합니다")
+    val tags: List<@Size(max = 20, message = "태그 이름은 20자 이하여야 합니다") String> = emptyList(),
 )
 
 /**
@@ -27,6 +34,7 @@ data class MemoResponse(
     val id: Long,
     val title: String,
     val content: String,
+    val tags: List<String>,
     val createdAt: LocalDateTime,
 ) {
     companion object {
@@ -35,6 +43,7 @@ data class MemoResponse(
                 id = memo.id,
                 title = memo.title,
                 content = memo.content,
+                tags = memo.tags.map { it.name },
                 createdAt = memo.createdAt,
             )
         }

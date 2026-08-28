@@ -1,6 +1,8 @@
 package io.github.qkqnfld.information_management.common.presentation
 
+import io.github.qkqnfld.information_management.common.exception.ConflictException
 import io.github.qkqnfld.information_management.common.exception.NotFoundException
+import io.github.qkqnfld.information_management.common.exception.UnauthorizedException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -27,6 +29,20 @@ class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.NOT_FOUND)
     fun handleNotFound(e: NotFoundException): ErrorResponse {
         return ErrorResponse(code = e.code, message = e.message ?: "리소스를 찾을 수 없습니다")
+    }
+
+    /** 인증 실패 (도메인 공통 부모 예외, 예: 잘못된 로그인 정보) → 401 */
+    @ExceptionHandler(UnauthorizedException::class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    fun handleUnauthorized(e: UnauthorizedException): ErrorResponse {
+        return ErrorResponse(code = e.code, message = e.message ?: "인증에 실패했습니다")
+    }
+
+    /** 현재 상태와 충돌 (도메인 공통 부모 예외, 예: 이메일 중복) → 409 */
+    @ExceptionHandler(ConflictException::class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    fun handleConflict(e: ConflictException): ErrorResponse {
+        return ErrorResponse(code = e.code, message = e.message ?: "요청이 현재 상태와 충돌합니다")
     }
 
     /** @Valid 검증 실패 → 400 + 어떤 필드가 왜 틀렸는지 */

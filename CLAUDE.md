@@ -12,6 +12,26 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
 
 - Kotlin 2.3 / Spring Boot 4.1 / Java 21 toolchain (foojay resolver가 JDK 자동 프로비저닝)
 - 빌드: `./gradlew build`, 실행: `./gradlew bootRun`
+- DB: H2 파일 모드(`./data/memodb`). 테스트는 인메모리 H2로 격리(`src/test/resources/application.properties`).
+  외부 DB(RDS 등) 전환은 비용 문제로 보류 중 — 과거 작성한 가이드는 `docs/rds-setup.md`.
+- 스키마는 Flyway가 관리한다 (`src/main/resources/db/migration/V*.sql`, `ddl-auto=validate`).
+  스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
+  (체크섬 불일치로 서버가 뜨지 않음). 기존 개발 DB는 baseline-version=4로 베이스라인 처리됨.
+- 인증: JWT access 토큰 1시간(무상태) + refresh 토큰 30일(DB 저장, RefreshToken 엔티티). 설정은 `common/security/`.
+  로그아웃 = refresh 삭제, 재발급 = POST /auth/refresh. permitAll: POST /members(가입), /auth/**,
+  /h2-console. 나머지는 `Authorization: Bearer <access>` 필수.
+  만료 refresh는 매일 04시 @Scheduled 배치(RefreshTokenCleanupScheduler)가 정리한다.
+- SNS 로그인(카카오/구글): POST /auth/login/kakao·google에 앱이 받은 SNS 토큰을 보내면
+  서버가 SNS API로 검증(Kakao/GoogleApiClient, member/infrastructure) 후 find-or-create + 우리 JWT 발급.
+  테스트는 클라이언트를 @MockitoBean으로 대체.
+- 계정 연동: 회원(Member="사람")과 로그인 수단(AuthCredential="문", 1:N)이 분리되어 있다.
+  연동 = POST /members/me/links/kakao·google (인증된 세션 + SNS 토큰 검증, 이메일 무관),
+  해제 = DELETE /members/me/links/{provider} (마지막 수단은 409). 이메일 일치 자동 통합은
+  계정 탈취 경로라 금지 — SNS 첫 로그인 시 이메일 충돌은 409 SOCIAL_EMAIL_CONFLICT로 안내만 한다.
+- 메모/태그는 소유자(Memo.memberId, id 참조) 기반: 모든 조회/수정/삭제는 로그인 회원 범위로 한정되고,
+  남의 메모 접근은 404로 존재를 숨긴다 (소유권 검사는 findByIdAndMemberId 쿼리에 포함).
+  통합 테스트는 @BeforeEach에서 가입+로그인으로 토큰을 얻는다. 테스트용 application.properties는
+  main을 '대체'하므로 main에 필수 속성을 추가하면 테스트 쪽에도 같이 추가해야 한다.
 
 ## 아키텍처: 실용형 레이어드 (선택적 Facade)
 

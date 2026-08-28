@@ -1,38 +1,203 @@
-### 전체 메모 조회
-GET http://localhost:8080/memos
+### ============ 인증 ============
 
-### 메모 생성
-POST http://localhost:8080/memos
+### 회원가입 (최초 1회만 실행)
+POST http://localhost:8080/members
 Content-Type: application/json
 
 {
+  "email": "maro@test.com",
+  "password": "password123",
+  "nickname": "마로"
+}
+
+### 로그인 — accessToken은 {{token}}, refreshToken은 {{refresh}} 변수로 자동 저장
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "email": "maro@test.com",
+  "password": "password123"
+}
+
+> {%
+client.global.set("token", response.body.accessToken);
+client.global.set("refresh", response.body.refreshToken);
+%}
+
+### 카카오 로그인 (token에 실제 카카오 access 토큰 필요 — 카카오 개발자 앱 등록 후 사용 가능.
+### 무효 토큰이면 401 INVALID_SNS_TOKEN이 나오는 것까지는 지금도 확인 가능)
+POST http://localhost:8080/auth/login/kakao
+Content-Type: application/json
+
+{
+  "token": "카카오_ACCESS_토큰"
+}
+
+### 구글 로그인 (token에 실제 구글 idToken 필요)
+POST http://localhost:8080/auth/login/google
+Content-Type: application/json
+
+{
+  "token": "구글_ID_토큰"
+}
+
+### access 토큰 재발급 (access가 만료(1시간)됐을 때 앱이 자동으로 하는 일)
+POST http://localhost:8080/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refresh}}"
+}
+
+> {% client.global.set("token", response.body.accessToken); %}
+
+### 로그아웃 — 이후 위의 재발급을 실행하면 401이 난다
+POST http://localhost:8080/auth/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refresh}}"
+}
+
+### 내 정보 조회 (providers = 연결된 로그인 수단 목록)
+GET http://localhost:8080/members/me
+Authorization: Bearer {{token}}
+
+### ============ 계정 연동 ============
+
+### 카카오 계정 연결 (로그인 상태에서. 이메일이 달라도 연결된다 — 실제 카카오 토큰 필요)
+POST http://localhost:8080/members/me/links/kakao
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "token": "카카오_ACCESS_토큰"
+}
+
+### 구글 계정 연결
+POST http://localhost:8080/members/me/links/google
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "token": "구글_ID_토큰"
+}
+
+### 연동 해제 (provider: LOCAL/KAKAO/GOOGLE. 마지막 수단이면 409)
+DELETE http://localhost:8080/members/me/links/KAKAO
+Authorization: Bearer {{token}}
+
+### ============ 메모 ============
+
+### 메모 목록 조회 (파라미터 없으면 기본값: page=0, size=20, 최신순)
+GET http://localhost:8080/memos
+Authorization: Bearer {{token}}
+
+### 페이지 지정 조회
+GET http://localhost:8080/memos?page=0&size=5
+Authorization: Bearer {{token}}
+
+### 키워드 검색 (제목 또는 내용에 포함)
+GET http://localhost:8080/memos?keyword=메모
+Authorization: Bearer {{token}}
+
+### 태그로 필터링
+GET http://localhost:8080/memos?tag=회의
+Authorization: Bearer {{token}}
+
+### 키워드 + 태그 조합 검색 (동적 쿼리 — 두 조건 모두 만족하는 메모만)
+GET http://localhost:8080/memos?keyword=메모&tag=회의
+Authorization: Bearer {{token}}
+
+### 태그 목록 조회 (태그별 메모 수 포함)
+GET http://localhost:8080/tags
+Authorization: Bearer {{token}}
+
+### 메모 생성 (tags는 생략 가능, 없는 태그는 자동 생성)
+POST http://localhost:8080/memos
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
   "title": "첫 메모",
-  "content": "서버에서 만든 첫 번째 메모입니다."
+  "content": "서버에서 만든 첫 번째 메모입니다.",
+  "tags": ["회의", "아이디어"]
 }
 
 ### 단건 조회 (id는 생성 응답의 값으로 바꿔서 실행)
 GET http://localhost:8080/memos/1
+Authorization: Bearer {{token}}
 
-### 메모 수정
+### 메모 수정 (태그 목록은 보낸 값으로 통째로 교체된다)
 PUT http://localhost:8080/memos/1
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
   "title": "수정된 제목",
-  "content": "내용도 수정했습니다."
+  "content": "내용도 수정했습니다.",
+  "tags": ["회의"]
 }
 
 ### 메모 삭제
 DELETE http://localhost:8080/memos/1
+Authorization: Bearer {{token}}
 
-### [검증 실패 확인용] 빈 제목 → 400 INVALID_REQUEST
+### ============ 소유권 확인용 (두 번째 계정) ============
+
+### 두 번째 계정 가입 (최초 1회만 실행)
+POST http://localhost:8080/members
+Content-Type: application/json
+
+{
+  "email": "other@test.com",
+  "password": "password123",
+  "nickname": "다른사람"
+}
+
+### 두 번째 계정 로그인 → {{token2}} 저장
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "email": "other@test.com",
+  "password": "password123"
+}
+
+> {% client.global.set("token2", response.body.accessToken); %}
+
+### 두 번째 계정으로 첫 계정의 메모 조회 → 404 (존재 은닉)
+GET http://localhost:8080/memos/1
+Authorization: Bearer {{token2}}
+
+### 두 번째 계정의 목록 → 자기 메모만 보인다
+GET http://localhost:8080/memos
+Authorization: Bearer {{token2}}
+
+### ============ 에러 확인용 ============
+
+### 토큰 없이 접근 → 401 UNAUTHORIZED
+GET http://localhost:8080/memos
+
+### 틀린 비밀번호 → 401 INVALID_CREDENTIALS
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "email": "maro@test.com",
+  "password": "wrong-password"
+}
+
+### 빈 제목 → 400 INVALID_REQUEST
 POST http://localhost:8080/memos
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
   "title": "",
   "content": "제목이 비어 있음"
 }
 
-### [검증 실패 확인용] 없는 메모 조회 → 404 MEMO_NOT_FOUND
+### 없는 메모 조회 → 404 MEMO_NOT_FOUND
 GET http://localhost:8080/memos/999999
+Authorization: Bearer {{token}}
