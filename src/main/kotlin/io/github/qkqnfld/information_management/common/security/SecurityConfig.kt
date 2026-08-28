@@ -38,16 +38,13 @@ class SecurityConfig(
             // 토큰 방식은 쿠키를 쓰지 않으므로 공격 표면이 없어 끈다.
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            // h2-console이 iframe으로 동작하므로 같은 출처의 frame만 허용
-            .headers { headers -> headers.frameOptions { it.sameOrigin() } }
             .authorizeHttpRequests {
                 it
-                    // 인증 없이 접근 가능한 문: 회원가입, 인증 관련 전체(/auth/**), (개발용) h2 콘솔.
+                    // 인증 없이 접근 가능한 문: 회원가입, 인증 관련 전체(/auth/**).
                     // /auth/**는 로그인 전(자체/SNS 로그인)이거나 access 만료 후(재발급/로그아웃)에
                     // 호출되는 API들이라 전부 열어둔다 — 각자 본문의 자격 증명이 검증 역할을 한다
                     .requestMatchers(HttpMethod.POST, "/members").permitAll()
                     .requestMatchers("/auth/**").permitAll()
-                    .requestMatchers("/h2-console/**").permitAll()
                     // (개발용) API 테스트 페이지. 로그인 전에도 열려야 하므로 GET만 허용한다
                     .requestMatchers(HttpMethod.GET, "/test.html").permitAll()
                     // 그 외 전부는 로그인(유효한 토큰) 필수

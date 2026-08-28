@@ -1,0 +1,41 @@
+# 실무형 로컬 스택: 앱 + PostgreSQL을 한 번에 띄운다.
+#   전체 실행:   docker compose up -d --build
+#   DB만 실행:   docker compose up -d db   (IntelliJ에서 앱을 직접 돌릴 때)
+#   중지:        docker compose down      (데이터는 volume에 남는다)
+#   데이터 초기화: docker compose down -v
+services:
+  db:
+    image: postgres:17
+    container_name: memo-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: memodb
+      POSTGRES_USER: memo
+      POSTGRES_PASSWORD: memo1234
+    volumes:
+      # named volume: 컨테이너를 지워도 데이터가 유지된다 (H2 파일이 컨테이너와 함께 사라지던 문제의 해법)
+      - memo-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memo -d memodb"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    container_name: memo-app
+    ports:
+      # APP_PORT 환경변수로 호스트 포트를 바꿀 수 있다 (기본 8080). 예: APP_PORT=8082 docker compose up
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      # 컨테이너 안에서 db는 localhost가 아니라 서비스 이름(db)으로 접근한다 (compose 내부 DNS)
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/memodb
+      TZ: Asia/Seoul
+    depends_on:
+      db:
+        # DB가 "떠 있음"이 아니라 "접속 가능함"(healthcheck 통과)일 때까지 앱 시작을 미룬다
+        condition: service_healthy
+
+volumes:
+  memo-db-data:

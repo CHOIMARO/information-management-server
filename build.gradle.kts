@@ -27,6 +27,8 @@ dependencies {
 	// DB 스키마 버전 관리 (마이그레이션은 src/main/resources/db/migration). H2 지원은 core에 내장.
 	// Boot 4는 기술별 자동구성이 분리되어 flyway-core만으로는 동작하지 않고 이 모듈이 필요하다
 	implementation("org.springframework.boot:spring-boot-flyway")
+	// Flyway 10+는 DB별 지원이 모듈로 분리됨 (H2는 core 내장, PostgreSQL은 별도)
+	implementation("org.flywaydb:flyway-database-postgresql")
 	// Kotlin JDSL: 타입 안전 동적 쿼리 (조건 조합 검색). boot4-support가 Spring Boot 4용 실행기를 제공
 	implementation("com.linecorp.kotlin-jdsl:jpql-dsl:3.8.1")
 	implementation("com.linecorp.kotlin-jdsl:jpql-render:3.8.1")
@@ -38,8 +40,11 @@ dependencies {
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	// Jackson이 Kotlin 문법(생성자 기본값, null 가능성)을 이해하게 하는 모듈. Kotlin+Spring 표준 구성.
 	implementation("tools.jackson.module:jackson-module-kotlin")
-	runtimeOnly("com.h2database:h2")
+	runtimeOnly("org.postgresql:postgresql")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	// 테스트가 진짜 PostgreSQL 컨테이너를 자동으로 띄워 사용한다 (운영과 같은 DB로 테스트)
+	// Boot 4는 Testcontainers 버전을 관리 목록에 두지 않아 버전을 직접 명시한다
+	testImplementation("org.testcontainers:postgresql:1.21.3")
 	testImplementation("org.springframework.boot:spring-boot-webmvc-test")
 	testImplementation("org.mockito.kotlin:mockito-kotlin:6.3.0")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

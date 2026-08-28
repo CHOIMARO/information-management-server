@@ -23,8 +23,12 @@ class RefreshTokenCleanupScheduler(
 
     private val log = LoggerFactory.getLogger(RefreshTokenCleanupScheduler::class.java)
 
-    /** 매일 새벽 4시(트래픽이 가장 적은 시간대)에 만료된 refresh 토큰을 삭제한다. */
-    @Scheduled(cron = "0 0 4 * * *")
+    /**
+     * 매일 새벽 4시(트래픽이 가장 적은 시간대)에 만료된 refresh 토큰을 삭제한다.
+     * zone 명시: 컨테이너/서버의 시스템 시간대는 보통 UTC라서, 명시하지 않으면
+     * "UTC 새벽 4시"(한국 낮 1시)에 돌게 된다.
+     */
+    @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
     @Transactional
     fun deleteExpiredTokens() {
         val deleted = refreshTokenRepository.deleteByExpiresAtBefore(LocalDateTime.now())

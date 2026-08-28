@@ -12,8 +12,10 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
 
 - Kotlin 2.3 / Spring Boot 4.1 / Java 21 toolchain (foojay resolver가 JDK 자동 프로비저닝)
 - 빌드: `./gradlew build`, 실행: `./gradlew bootRun`
-- DB: H2 파일 모드(`./data/memodb`). 테스트는 인메모리 H2로 격리(`src/test/resources/application.properties`).
-  외부 DB(RDS 등) 전환은 비용 문제로 보류 중 — 과거 작성한 가이드는 `docs/rds-setup.md`.
+- DB: PostgreSQL 17. 로컬 개발은 `docker compose up -d db`(루트 compose.yaml, localhost:5432),
+  앱까지 컨테이너로 돌리려면 `docker compose up -d --build` (호스트 포트는 `APP_PORT`로 변경 가능).
+  테스트는 Testcontainers가 PostgreSQL 컨테이너를 자동으로 띄운다(jdbc:tc: URL) — **테스트 실행에 Docker 필요**.
+  클라우드 DB(RDS) 전환 가이드는 `docs/rds-setup.md`.
 - 스키마는 Flyway가 관리한다 (`src/main/resources/db/migration/V*.sql`, `ddl-auto=validate`).
   스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
   (체크섬 불일치로 서버가 뜨지 않음). 기존 개발 DB는 baseline-version=4로 베이스라인 처리됨.
@@ -95,5 +97,5 @@ memo/
 ## 작업 규칙
 
 - 새 클래스/인터페이스/의존성이 필요하면 구현 전에 사용자에게 확인받는다.
-- 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `./gradlew bootRun --args='--server.port=8081'`로 8081을 사용하고, 검증 후 반드시 종료한다.
+- 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `./gradlew bootRun --args='--server.port=8081'`(compose의 db가 떠 있어야 함) 또는 `APP_PORT=8082 docker compose up -d`를 사용하고, 검증 후 반드시 종료한다.
 - API 수동 테스트 요청 모음: 프로젝트 루트 `memos.http`
