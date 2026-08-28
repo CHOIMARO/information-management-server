@@ -25,3 +25,11 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# 빌드 산출물과 로컬 도구 상태 (소스에서 재생성되므로 저장소에 두지 않는다)
+build/
+.gradle/
+.idea/
+
+# H2 파일 DB (로컬 데이터라 저장소에 두지 않는다)
+data/

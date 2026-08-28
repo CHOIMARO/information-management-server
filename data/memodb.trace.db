@@ -1,3 +1,0 @@
-2026-08-26 17:33:43.900589+09:00 jdbc[3]: exception
-org.h2.jdbc.JdbcSQLDataException: Value too long for column "CONTENT CHARACTER VARYING(4000)": "U&'\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\ac00\\a... (5000)"; SQL statement:
-insert into memos (content,created_at,title,id) values (?,?,?,default) [22001-240]
