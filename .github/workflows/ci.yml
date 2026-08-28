@@ -1,0 +1,72 @@
+# CI 파이프라인.
+# 트리거 설계 (실무 문법: "매 커밋은 검증, 태그는 릴리스"):
+#   - PR:            테스트만 (머지 게이트 — 이미지는 만들지 않는다)
+#   - main push:     테스트 + 이미지 빌드 → GHCR (latest, sha-<커밋> 태그)
+#   - v* 태그 push:  테스트 + 이미지 빌드 → GHCR (v1.2.3 버전 태그) = 릴리스 승격
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # GHCR(GitHub 컨테이너 레지스트리)에 이미지를 올리기 위한 권한
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: JDK 21 설치
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Gradle 설정 (의존성 캐시 포함)
+        uses: gradle/actions/setup-gradle@v4
+
+      # GitHub 러너에는 Docker가 기본 탑재 → Testcontainers가 PostgreSQL을 띄워 테스트한다.
+      # 여기서 실패하면 이미지 빌드 단계로 넘어가지 않는다 = 테스트가 배포 게이트.
+      - name: 테스트 및 빌드
+        run: ./gradlew build
+
+      # ---- 이하 이미지 빌드/푸시: PR에서는 건너뛴다 ----
+
+      - name: GHCR 로그인
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN은 Actions가 자동 발급하는 일회성 토큰 — 시크릿 등록이 따로 필요 없다
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 이미지 태그 계산
+        if: github.event_name != 'pull_request'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # main push → latest + sha-<커밋>, v* 태그 push → 그 버전 이름
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+            type=ref,event=tag
+
+      - name: 이미지 빌드 및 푸시
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 레이어 캐시를 Actions 캐시에 보관해 다음 빌드를 빠르게 한다
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
