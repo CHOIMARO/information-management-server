@@ -2,6 +2,7 @@ package io.github.qkqnfld.information_management.dubbing.presentation
 
 import io.github.qkqnfld.information_management.dubbing.domain.CustomVoice
 import io.github.qkqnfld.information_management.dubbing.domain.PresetVoice
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -28,6 +29,8 @@ data class RegisterVoiceRequest(
     @field:AssertTrue(message = "목소리 복제 동의가 필요합니다")
     val consentAgreed: Boolean?,
 ) {
+    // 검증용 계산 값이다. 앱이 보내는 필드가 아니므로 API 문서에서 숨긴다
+    @get:Schema(hidden = true)
     @get:AssertTrue(message = "녹음 파일이 비어 있습니다")
     val isFileNotEmpty: Boolean
         get() = file == null || !file.isEmpty

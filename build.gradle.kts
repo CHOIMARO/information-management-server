@@ -41,6 +41,9 @@ dependencies {
 	// BOM(platform)이 AWS 모듈들의 버전을 하나로 맞춰 주므로 개별 모듈에는 버전을 적지 않는다.
 	implementation(platform("software.amazon.awssdk:bom:2.57.8"))
 	implementation("software.amazon.awssdk:s3")
+	// API 문서 자동 생성(OpenAPI) + Swagger UI. 3.x가 Spring Boot 4용이다 (2.x는 Boot 3용).
+	// 문서 주소: /swagger-ui.html, JSON: /v3/api-docs. 운영에서는 환경변수로 끈다 (docs/ec2-setup.md 6-1).
+	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	// Jackson이 Kotlin 문법(생성자 기본값, null 가능성)을 이해하게 하는 모듈. Kotlin+Spring 표준 구성.
 	implementation("tools.jackson.module:jackson-module-kotlin")

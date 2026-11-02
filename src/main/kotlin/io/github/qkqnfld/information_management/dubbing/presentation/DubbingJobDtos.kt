@@ -3,6 +3,7 @@ package io.github.qkqnfld.information_management.dubbing.presentation
 import io.github.qkqnfld.information_management.dubbing.application.DubbingJobResult
 import io.github.qkqnfld.information_management.dubbing.domain.DubbingJobStatus
 import io.github.qkqnfld.information_management.dubbing.domain.PresetVoice
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -23,6 +24,8 @@ data class CreateDubbingJobRequest(
     /** GET /voices의 custom[].id 값 */
     val customVoiceId: Long? = null,
 ) {
+    // 검증용 계산 값이다. 앱이 보내는 필드가 아니므로 API 문서에서 숨긴다
+    @get:Schema(hidden = true)
     @get:AssertTrue(message = "presetVoice와 customVoiceId 중 정확히 하나를 지정해야 합니다")
     val isVoiceSelectedOnce: Boolean
         get() = (presetVoice == null) != (customVoiceId == null)

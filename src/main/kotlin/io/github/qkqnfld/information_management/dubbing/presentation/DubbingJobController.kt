@@ -2,7 +2,9 @@ package io.github.qkqnfld.information_management.dubbing.presentation
 
 import io.github.qkqnfld.information_management.common.presentation.PageResponse
 import io.github.qkqnfld.information_management.dubbing.application.DubbingJobService
+import io.swagger.v3.oas.annotations.responses.ApiResponse
 import jakarta.validation.Valid
+import org.springdoc.core.annotations.ParameterObject
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.data.web.PageableDefault
@@ -36,6 +38,7 @@ class DubbingJobController(
      * Location 헤더에 상태를 확인할 주소를 담아 준다.
      */
     @PostMapping
+    @ApiResponse(responseCode = "202", description = "접수됨. Location 헤더의 주소(GET /dubbing-jobs/{id})로 상태를 조회한다")
     fun create(
         @AuthenticationPrincipal memberId: Long,
         @Valid @RequestBody request: CreateDubbingJobRequest,
@@ -56,7 +59,8 @@ class DubbingJobController(
     @GetMapping
     fun findAll(
         @AuthenticationPrincipal memberId: Long,
-        @PageableDefault(size = 20, sort = ["id"], direction = Sort.Direction.DESC) pageable: Pageable,
+        // @ParameterObject: 문서에 page, size, sort를 각각의 선택 쿼리 파라미터로 표시한다
+        @ParameterObject @PageableDefault(size = 20, sort = ["id"], direction = Sort.Direction.DESC) pageable: Pageable,
     ): PageResponse<DubbingJobResponse> {
         val page = dubbingJobService.findAll(memberId, pageable).map { DubbingJobResponse.from(it) }
         return PageResponse.from(page)

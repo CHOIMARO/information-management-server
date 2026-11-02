@@ -47,6 +47,8 @@ class SecurityConfig(
                     .requestMatchers("/auth/**").permitAll()
                     // (개발용) API 테스트 페이지. 로그인 전에도 열려야 하므로 GET만 허용한다
                     .requestMatchers(HttpMethod.GET, "/test.html").permitAll()
+                    // (개발용) API 문서. 운영에서는 springdoc을 꺼서 이 경로들이 404가 된다
+                    .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     // 그 외 전부는 로그인(유효한 토큰) 필수
                     .anyRequest().authenticated()
             }
