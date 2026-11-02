@@ -37,6 +37,10 @@ dependencies {
 	implementation("io.jsonwebtoken:jjwt-api:0.13.0")
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
+	// AWS SDK v2: 더빙 결과 mp3를 S3에 저장하고 presigned URL을 발급한다.
+	// BOM(platform)이 AWS 모듈들의 버전을 하나로 맞춰 주므로 개별 모듈에는 버전을 적지 않는다.
+	implementation(platform("software.amazon.awssdk:bom:2.57.8"))
+	implementation("software.amazon.awssdk:s3")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	// Jackson이 Kotlin 문법(생성자 기본값, null 가능성)을 이해하게 하는 모듈. Kotlin+Spring 표준 구성.
 	implementation("tools.jackson.module:jackson-module-kotlin")

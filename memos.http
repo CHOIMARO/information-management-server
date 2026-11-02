@@ -143,6 +143,88 @@ Authorization: Bearer {{token}}
 DELETE http://localhost:8080/memos/1
 Authorization: Bearer {{token}}
 
+### ============ 더빙 (Typecast TTS) ============
+### 실제 합성을 하려면 서버를 띄우기 전에 TYPECAST_API_KEY, AWS_S3_BUCKET 환경변수와
+### AWS 자격 증명이 필요하다 (docs/s3-setup.md). 없어도 접수·검증·조회 흐름은 확인할 수 있다.
+
+### 목소리 목록 (presets = AI 목소리, custom = 내 목소리)
+GET http://localhost:8080/voices
+Authorization: Bearer {{token}}
+
+### 내 목소리 등록 (회원당 1개). 프로젝트 루트에 voice-sample.wav(5~150초, 25MB 이하)를 두고 실행한다.
+### consentAgreed가 true가 아니면 400
+POST http://localhost:8080/voices
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=VoiceBoundary
+
+--VoiceBoundary
+Content-Disposition: form-data; name="file"; filename="voice-sample.wav"
+Content-Type: audio/wav
+
+< ./voice-sample.wav
+--VoiceBoundary
+Content-Disposition: form-data; name="name"
+
+내 목소리
+--VoiceBoundary
+Content-Disposition: form-data; name="consentAgreed"
+
+true
+--VoiceBoundary--
+
+> {% client.global.set("voiceId", response.body.id); %}
+
+### 내 목소리 삭제 (업체 쪽 목소리도 함께 지워 슬롯을 비운다)
+DELETE http://localhost:8080/voices/{{voiceId}}
+Authorization: Bearer {{token}}
+
+### 더빙 요청 — AI 목소리 (202 + PENDING, 응답의 id는 {{jobId}}로 저장)
+POST http://localhost:8080/dubbing-jobs
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "안녕하세요. 서버에서 만든 첫 번째 더빙입니다.",
+  "presetVoice": "DYLAN"
+}
+
+> {% client.global.set("jobId", response.body.id); %}
+
+### 더빙 요청 — 내 목소리 (customVoiceId는 목소리 등록 응답의 id)
+POST http://localhost:8080/dubbing-jobs
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "내 목소리로 읽는 문장입니다.",
+  "customVoiceId": {{voiceId}}
+}
+
+> {% client.global.set("jobId", response.body.id); %}
+
+### 더빙 상태 조회 — COMPLETED가 되면 audioUrl을 브라우저로 열어 들어 본다 (10분 뒤 만료)
+GET http://localhost:8080/dubbing-jobs/{{jobId}}
+Authorization: Bearer {{token}}
+
+### 내 더빙 목록 (최신순)
+GET http://localhost:8080/dubbing-jobs
+Authorization: Bearer {{token}}
+
+### 더빙 삭제 (S3 파일도 함께 삭제)
+DELETE http://localhost:8080/dubbing-jobs/{{jobId}}
+Authorization: Bearer {{token}}
+
+### 목소리를 둘 다 지정 → 400 INVALID_REQUEST (voiceSelectedOnce)
+POST http://localhost:8080/dubbing-jobs
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "text": "목소리를 둘 다 지정",
+  "presetVoice": "DYLAN",
+  "customVoiceId": 1
+}
+
 ### ============ 소유권 확인용 (두 번째 계정) ============
 
 ### 두 번째 계정 가입 (최초 1회만 실행)
