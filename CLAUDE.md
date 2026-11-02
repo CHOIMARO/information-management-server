@@ -15,7 +15,8 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
 - DB: PostgreSQL 17. 로컬 개발은 `docker compose up -d db`(루트 compose.yaml, localhost:5432),
   앱까지 컨테이너로 돌리려면 `docker compose up -d --build` (호스트 포트는 `APP_PORT`로 변경 가능).
   테스트는 Testcontainers가 PostgreSQL 컨테이너를 자동으로 띄운다(jdbc:tc: URL) — **테스트 실행에 Docker 필요**.
-  클라우드 DB(RDS) 전환 가이드는 `docs/rds-setup.md`.
+  클라우드 DB(RDS) 전환 가이드는 `docs/rds-setup.md`, EC2(서울) 생성·Docker 배포 가이드는 `docs/ec2-setup.md`
+  (이미지는 amd64 전용 → t3 계열만, 컨테이너가 IAM 역할을 쓰려면 메타데이터 홉 제한 2).
 - 스키마는 Flyway가 관리한다 (`src/main/resources/db/migration/V*.sql`, `ddl-auto=validate`).
   스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
   (체크섬 불일치로 서버가 뜨지 않음). 기존 개발 DB는 baseline-version=4로 베이스라인 처리됨.
@@ -34,6 +35,12 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
   남의 메모 접근은 404로 존재를 숨긴다 (소유권 검사는 findByIdAndMemberId 쿼리에 포함).
   통합 테스트는 @BeforeEach에서 가입+로그인으로 토큰을 얻는다. 테스트용 application.properties는
   main을 '대체'하므로 main에 필수 속성을 추가하면 테스트 쪽에도 같이 추가해야 한다.
+- 더빙(dubbing 도메인): Typecast TTS(TtsClient 인터페이스 → TypecastTtsClient)로 AI 목소리(PresetVoice)와
+  내 목소리(CustomVoice, 회원당 1개, 복제 동의 필수, 업체 voice_id는 앱에 노출 금지)를 합성한다.
+  POST /dubbing-jobs는 202로 접수만 하고, DubbingJobWorker(@Scheduled, DB를 큐로 사용, for update skip locked)가
+  트랜잭션 밖에서 합성 → S3 업로드 → 조회 시 presigned URL. 키는 환경변수(TYPECAST_API_KEY, AWS_S3_BUCKET),
+  AWS 권한은 IAM 역할/기본 자격 증명 체인. 테스트는 TtsClient·AudioStorage를 @MockitoBean으로 대체하고
+  Worker는 processNext()를 직접 호출한다. 설정 가이드 `docs/s3-setup.md`, 남은 작업 `docs/dubbing-todo.md`.
 
 ## 아키텍처: 실용형 레이어드 (선택적 Facade)
 

@@ -1,11 +1,11 @@
 # AWS RDS (PostgreSQL) 생성 및 연결 가이드
 
 이 프로젝트를 EC2에 배포할 때, DB는 애플리케이션 서버와 분리된 RDS를 사용한다.
-앱은 `prod` 프로필로 실행하며, 연결 정보는 환경변수로 주입한다 (`application-prod.properties` 참고).
+앱은 EC2에서 Docker 컨테이너로 실행하며, 연결 정보는 환경변수로 주입한다 (`docs/ec2-setup.md` 6단계).
 
 ```
 [로컬]  Spring Boot ──> Docker PostgreSQL (compose.yaml)
-[운영]  EC2 (Spring Boot, prod 프로필) ──> RDS PostgreSQL
+[운영]  EC2 (Docker 컨테이너) ──> RDS PostgreSQL
 ```
 
 ## 0. 시작 전 확인
@@ -21,8 +21,8 @@ RDS 콘솔 → **데이터베이스 생성**:
 2. **엔진**: PostgreSQL, 버전 17.x (로컬 compose.yaml의 `postgres:17`과 메이저 버전을 맞춘다)
 3. **템플릿**: 프리 티어 (선택하면 아래 옵션 대부분이 저비용 구성으로 잠긴다)
 4. **설정**
-   - DB 인스턴스 식별자: `memo-db` (AWS 콘솔에서 보이는 이름일 뿐, DB 이름이 아니다)
-   - 마스터 사용자 이름: `memo`
+   - DB 인스턴스 식별자: `magic-editor-db` (AWS 콘솔에서 보이는 이름일 뿐, DB 이름이 아니다)
+   - 마스터 사용자 이름: `magiceditor` (영문자와 숫자만 쓸 수 있다. 하이픈 `-`은 쓸 수 없다)
    - 자격 증명 관리: **자체 관리** 선택 후 비밀번호 직접 입력 (Secrets Manager 관리형은 별도 과금)
 5. **인스턴스 구성**: db.t4g.micro
 6. **스토리지**: gp3, 20GiB. **스토리지 자동 조정(autoscaling)은 비활성화** — 학습용에서 예상 밖 과금을 막는다.
@@ -30,11 +30,11 @@ RDS 콘솔 → **데이터베이스 생성**:
    - EC2 인스턴스가 **이미 있다면**: "EC2 컴퓨팅 리소스에 연결" 선택 → 인스턴스 지정. 보안 그룹을 AWS가 자동으로 구성해 준다 (가장 쉬운 경로).
    - EC2가 **아직 없다면**: "EC2 컴퓨팅 리소스에 연결 안 함" + 퍼블릭 액세스 **아니요**로 만들어 두고, EC2 생성 후 아래 2번처럼 보안 그룹을 수동 연결한다.
 8. **추가 구성 (중요)**
-   - **초기 데이터베이스 이름: `memodb`** — 비워두면 인스턴스만 생기고 데이터베이스는 안 만들어져서 나중에 psql로 직접 `CREATE DATABASE` 해야 한다.
+   - **초기 데이터베이스 이름: `magiceditor`** (영문자·숫자·밑줄만 쓸 수 있다. 하이픈 `-`은 쓸 수 없다) — 비워두면 인스턴스만 생기고 데이터베이스는 안 만들어져서 나중에 psql로 직접 `CREATE DATABASE` 해야 한다.
    - 자동 백업: 활성화 유지 (보존 기간 기본값 7일)
    - 삭제 방지: 켜두면 실수로 지우는 것을 막아준다 (지울 때 해제 필요)
 
-생성에는 5~10분 걸린다. 완료되면 데이터베이스 상세 화면에서 **엔드포인트**(예: `memo-db.xxxx.ap-northeast-2.rds.amazonaws.com`)를 복사해 둔다.
+생성에는 5~10분 걸린다. 완료되면 데이터베이스 상세 화면에서 **엔드포인트**(예: `magic-editor-db.xxxx.ap-northeast-2.rds.amazonaws.com`)를 복사해 둔다.
 
 ## 2. 보안 그룹 수동 구성 (7번에서 자동 연결을 안 했을 때만)
 
@@ -51,28 +51,19 @@ RDS 콘솔 → **데이터베이스 생성**:
 sudo dnf install -y postgresql17
 
 # 접속 테스트 (비밀번호 입력 프롬프트가 뜬다)
-psql -h <RDS 엔드포인트> -U memo -d memodb
+psql -h <RDS 엔드포인트> -U magiceditor -d magiceditor
 ```
 
-`memodb=>` 프롬프트가 뜨면 성공. `\q`로 나온다.
+`magiceditor=>` 프롬프트가 뜨면 성공. `\q`로 나온다.
 
 - 타임아웃이 나면: 보안 그룹 인바운드 규칙, 같은 VPC/리전인지부터 확인한다. (RDS 연결 문제의 90%는 보안 그룹이다)
 
 ## 4. 애플리케이션 실행 (EC2에서)
 
-```bash
-export SPRING_PROFILES_ACTIVE=prod
-export DB_HOST=<RDS 엔드포인트>
-export DB_NAME=memodb
-export DB_USERNAME=memo
-export DB_PASSWORD=<비밀번호>
+앱은 GHCR의 Docker 이미지로 실행한다. 절차는 `docs/ec2-setup.md` 6단계를 따른다.
 
-java -jar information-management-0.0.1-SNAPSHOT.jar
-```
-
-첫 실행 시 `ddl-auto=update`가 memo 테이블을 자동 생성한다. 기동 로그에 Hibernate의 `create table` SQL이 보이면 정상이다.
-
-> 매번 export 하는 대신 systemd 서비스의 `Environment=` 또는 `EnvironmentFile=`로 관리하는 것이 운영 표준이다. 배포 자동화 단계에서 함께 다루자.
+- DB 연결 정보는 환경변수 파일의 `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`로 넣는다.
+- 첫 실행 시 Flyway가 빈 DB에 마이그레이션(V1, V2...)을 순서대로 적용해 테이블을 만든다. 기동 로그에 `Migrating schema "public" to version ...` 줄이 보이면 정상이다.
 
 ## 5. 로컬 PC에서 RDS에 직접 붙어보고 싶다면 (선택)
 
