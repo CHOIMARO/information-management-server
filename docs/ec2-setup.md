@@ -3,6 +3,9 @@
 서울 리전(`ap-northeast-2`)에 EC2를 새로 만들고, Docker로 앱을 실행한다.
 앱 이미지는 GitHub Actions가 GHCR에 올린 것을 그대로 받는다 (`.github/workflows/ci.yml`).
 
+**환경 운영 방침**: 출시 전까지 이 서버는 **개발 서버**로 쓴다 (Swagger 켬, 보안 그룹은 회사·집 IP만 허용).
+출시할 때 이 서버를 **운영 서버**로 전환하고, 개발 서버는 작게 새로 만든다. 전환 절차는 `docs/dubbing-todo.md` 0번에 있다.
+
 ```
 [앱] ── HTTP(80) ──> [EC2 서울: Docker 컨테이너 magic-editor-server(8080)] ──> [RDS 서울]
                                   ├── IAM 역할 ──> [S3 서울]
@@ -124,8 +127,16 @@ AWS_REGION=ap-northeast-2
 TZ=Asia/Seoul
 ```
 
+운영 서버로 전환할 때는 아래 두 줄을 추가해서 API 문서(Swagger)를 끈다. 개발 서버에는 넣지 않는다.
+
+```
+SPRINGDOC_API_DOCS_ENABLED=false
+SPRINGDOC_SWAGGER_UI_ENABLED=false
+```
+
 - 값에 따옴표를 붙이지 않는다. Docker는 따옴표까지 값으로 읽는다.
 - `export`를 붙이지 않는다. 이 파일은 셸 스크립트가 아니라 Docker 환경변수 파일이다.
+- API 문서(Swagger UI)는 개발용이다. 개발 서버에서는 `http://<서버 IP>/swagger-ui.html`, 로컬에서는 `http://localhost:8080/swagger-ui.html`로 연다.
 - Spring Boot는 `JWT_SECRET`을 `jwt.secret` 속성으로 읽는다 (relaxed binding: 대문자·밑줄 이름을 소문자·점 이름에 자동으로 맞춘다).
 - 주의: `JWT_SECRET`을 바꾸면 이미 발급된 토큰이 모두 무효가 된다. 사용자는 다시 로그인해야 한다.
 - 주의: S3 설정을 마치기 전에는 `TYPECAST_API_KEY` 줄을 비워 둔다. 키만 있으면 더빙 1건마다 크레딧을 여러 번 쓴다 (`docs/dubbing-todo.md` 2-1).
@@ -200,6 +211,7 @@ docker run -d --name magic-editor-server --restart unless-stopped -p 80:8080 \
 | 컨테이너가 `exec format error`로 종료 | 인스턴스가 t4g(ARM)인지 확인한다. t3 계열로 다시 만든다. |
 | 앱 로그에 DB 연결 시간 초과 | RDS 보안 그룹이 EC2 보안 그룹의 5432 접근을 허용하는지 확인한다 (`docs/rds-setup.md` 2단계). |
 | 외부에서 접속이 안 됨 | 보안 그룹 80번 규칙과 `docker ps`의 포트 매핑(`0.0.0.0:80->8080`)을 확인한다. |
+| 앱 API와 SSH가 모두 갑자기 시간 초과 | 개인 시험 기간에 80번 규칙을 "내 IP"로 제한했다면, 집 공인 IP가 바뀌었을 수 있다. `curl -4 https://checkip.amazonaws.com`으로 지금 IP를 확인하고, 보안 그룹의 22번과 80번 규칙 소스를 다시 "내 IP"로 지정한다. |
 | 더빙이 `Unable to load credentials`로 실패 | IAM 역할이 연결됐는지, 메타데이터 응답 홉 제한이 2인지 확인한다 (2단계 7번). |
 | 컨테이너가 바로 종료 | `docker logs magic-editor-server`로 원인을 본다. 환경변수 파일의 오타와 따옴표를 먼저 확인한다. |
 

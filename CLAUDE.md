@@ -106,3 +106,7 @@ memo/
 - 새 클래스/인터페이스/의존성이 필요하면 구현 전에 사용자에게 확인받는다.
 - 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `./gradlew bootRun --args='--server.port=8081'`(compose의 db가 떠 있어야 함) 또는 `APP_PORT=8082 docker compose up -d`를 사용하고, 검증 후 반드시 종료한다.
 - API 수동 테스트 요청 모음: 프로젝트 루트 `memos.http`
+- API 문서: springdoc이 컨트롤러·DTO에서 자동 생성한다. 로컬 `http://localhost:8080/swagger-ui.html`.
+  설정은 `common/config/OpenApiConfig.kt` (공개 API 판정은 SecurityConfig의 permitAll과 맞춘다).
+  메모 API는 문서에서 제외(`springdoc.paths-to-exclude`). 출시 전까지 EC2는 개발 서버라 Swagger를 켜 두고,
+  운영 전환 시 환경변수로 끈다 (`docs/dubbing-todo.md` 0번). 검증은 `OpenApiDocsTest`.
