@@ -34,11 +34,22 @@ class OpenApiDocsTest {
     fun `문서 JSON은 로그인 없이 열리고 인증과 더빙 API를 담는다`() {
         mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.paths['/auth/login']").exists())
+            .andExpect(jsonPath("$.paths['/auth/login/kakao']").exists())
+            .andExpect(jsonPath("$.paths['/members/me'].delete").exists())
+            .andExpect(jsonPath("$.paths['/members/me'].patch").exists())
+            .andExpect(jsonPath("$.paths['/dubbing-options']").exists())
             .andExpect(jsonPath("$.paths['/voices']").exists())
             .andExpect(jsonPath("$.paths['/dubbing-jobs']").exists())
             .andExpect(jsonPath("$.paths['/dubbing-jobs/{id}']").exists())
             .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+    }
+
+    @Test
+    fun `이메일 가입과 이메일 로그인 API는 문서에 없다`() {
+        mockMvc.perform(get("/v3/api-docs"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.paths['/members']").doesNotExist())
+            .andExpect(jsonPath("$.paths['/auth/login']").doesNotExist())
     }
 
     @Test
@@ -55,11 +66,12 @@ class OpenApiDocsTest {
         mockMvc.perform(get("/v3/api-docs"))
             .andExpect(status().isOk)
             // 공개 API: SecurityConfig의 permitAll 목록
-            .andExpect(jsonPath("$.paths['/members'].post.security").doesNotExist())
-            .andExpect(jsonPath("$.paths['/auth/login'].post.security").doesNotExist())
+            .andExpect(jsonPath("$.paths['/auth/login/kakao'].post.security").doesNotExist())
             .andExpect(jsonPath("$.paths['/auth/refresh'].post.security").doesNotExist())
+            .andExpect(jsonPath("$.paths['/dubbing-options'].get.security").doesNotExist())
             // 로그인이 필요한 API
             .andExpect(jsonPath("$.paths['/members/me'].get.security[0].bearerAuth").exists())
+            .andExpect(jsonPath("$.paths['/members/me'].delete.security[0].bearerAuth").exists())
             .andExpect(jsonPath("$.paths['/dubbing-jobs'].post.security[0].bearerAuth").exists())
             .andExpect(jsonPath("$.paths['/voices'].get.security[0].bearerAuth").exists())
     }

@@ -36,6 +36,15 @@ services:
       TYPECAST_API_KEY: ${TYPECAST_API_KEY:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      # SNS 로그인과 탈퇴: 없으면 그 SNS 로그인만 거절된다 (application.properties 참고)
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      APPLE_CLIENT_IDS: ${APPLE_CLIENT_IDS:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
     volumes:
       # 로컬 AWS 자격 증명(aws configure 결과)을 읽기 전용으로 빌려준다. 운영(EC2)은 IAM 역할을 쓴다.
       - ${HOME}/.aws:/home/appuser/.aws:ro

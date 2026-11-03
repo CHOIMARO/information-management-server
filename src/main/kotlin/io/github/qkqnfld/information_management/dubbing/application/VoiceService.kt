@@ -89,6 +89,23 @@ class VoiceService(
         customVoiceRepository.delete(voice)
     }
 
+    /**
+     * 탈퇴한 회원의 내 목소리를 모두 지운다 (DubbingDataCleaner가 부른다).
+     * 목소리마다 업체 쪽을 먼저 지우고, 성공하면 DB 행을 지운다.
+     * 업체 삭제가 실패하면 예외를 던진다. 남은 행은 탈퇴 Worker가 나중에 다시 지운다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    fun deleteAllOfMember(memberId: Long) {
+        customVoiceRepository.findAllByMemberIdOrderByIdAsc(memberId).forEach { voice ->
+            try {
+                ttsClient.deleteVoice(voice.providerVoiceId)
+            } catch (e: TtsException) {
+                throw VoiceServiceUnavailableException()
+            }
+            customVoiceRepository.delete(voice)
+        }
+    }
+
     private fun deleteProviderVoiceQuietly(providerVoiceId: String) {
         try {
             ttsClient.deleteVoice(providerVoiceId)

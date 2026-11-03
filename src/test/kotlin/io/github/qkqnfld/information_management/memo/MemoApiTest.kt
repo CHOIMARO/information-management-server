@@ -1,5 +1,6 @@
 package io.github.qkqnfld.information_management.memo
 
+import io.github.qkqnfld.information_management.support.TestMembers
 import org.junit.jupiter.api.BeforeEach
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -28,29 +29,16 @@ class MemoApiTest {
     @Autowired
     private lateinit var mockMvc: MockMvc
 
+    @Autowired
+    private lateinit var testMembers: TestMembers
+
     private lateinit var token: String
 
-    /** 새 회원을 가입시키고 로그인해 토큰을 반환한다 (소유권 테스트에서 두 번째 회원용으로도 사용). */
-    private fun registerAndLogin(): String {
-        val email = "memo-tester-${System.nanoTime()}@test.com"
-        mockMvc.perform(
-            post("/members")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123","nickname":"메모테스터"}"""),
-        ).andExpect(status().isCreated)
-
-        val body = mockMvc.perform(
-            post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123"}"""),
-        ).andExpect(status().isOk).andReturn().response.contentAsString
-        return Regex("\"accessToken\":\"([^\"]+)\"").find(body)!!.groupValues[1]
-    }
 
     /** 테스트마다 새 회원으로 로그인해 토큰을 준비한다. */
     @BeforeEach
     fun setUpAuth() {
-        token = registerAndLogin()
+        token = testMembers.newMemberToken()
     }
 
     /** 요청에 인증 토큰을 싣는다. 기본은 이 테스트의 회원, 지정하면 다른 회원의 토큰. */
@@ -284,7 +272,7 @@ class MemoApiTest {
     @Test
     fun `목록에는 내 메모만 보인다`() {
         createMemo(title = "내 메모", content = "내용")
-        val otherToken = registerAndLogin()
+        val otherToken = testMembers.newMemberToken()
         createMemo(title = "남의 메모 1", content = "내용", withToken = otherToken)
         createMemo(title = "남의 메모 2", content = "내용", withToken = otherToken)
 
@@ -297,7 +285,7 @@ class MemoApiTest {
     @Test
     fun `남의 메모를 단건 조회하면 404로 존재를 숨긴다`() {
         val myMemoId = createMemo(title = "내 메모", content = "내용")
-        val otherToken = registerAndLogin()
+        val otherToken = testMembers.newMemberToken()
 
         mockMvc.perform(get("/memos/$myMemoId").authed(otherToken))
             .andExpect(status().isNotFound)
@@ -307,7 +295,7 @@ class MemoApiTest {
     @Test
     fun `남의 메모는 수정하거나 삭제할 수 없다`() {
         val myMemoId = createMemo(title = "내 메모", content = "내용")
-        val otherToken = registerAndLogin()
+        val otherToken = testMembers.newMemberToken()
 
         mockMvc.perform(
             put("/memos/$myMemoId")
@@ -328,7 +316,7 @@ class MemoApiTest {
     @Test
     fun `태그 목록은 내 메모에 붙인 태그만 집계한다`() {
         createMemo(title = "내 메모", content = "내용", tags = listOf("소유태그V"))
-        val otherToken = registerAndLogin()
+        val otherToken = testMembers.newMemberToken()
         createMemo(title = "남의 메모 1", content = "내용", tags = listOf("소유태그V"), withToken = otherToken)
         createMemo(title = "남의 메모 2", content = "내용", tags = listOf("소유태그V", "남의태그W"), withToken = otherToken)
 

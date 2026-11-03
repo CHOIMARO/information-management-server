@@ -21,26 +21,34 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
   스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
   (체크섬 불일치로 서버가 뜨지 않음). 기존 개발 DB는 baseline-version=4로 베이스라인 처리됨.
 - 인증: JWT access 토큰 1시간(무상태) + refresh 토큰 30일(DB 저장, RefreshToken 엔티티). 설정은 `common/security/`.
-  로그아웃 = refresh 삭제, 재발급 = POST /auth/refresh. permitAll: POST /members(가입), /auth/**,
-  /h2-console. 나머지는 `Authorization: Bearer <access>` 필수.
+  로그아웃 = refresh 삭제, 재발급 = POST /auth/refresh. permitAll: /auth/**, GET /dubbing-options.
+  나머지는 `Authorization: Bearer <access>` 필수. JwtAuthenticationFilter는 토큰의 회원이 아직 있는지도
+  확인한다(ActiveMemberChecker, 탈퇴 직후 남은 access 토큰 거절).
   만료 refresh는 매일 04시 @Scheduled 배치(RefreshTokenCleanupScheduler)가 정리한다.
-- SNS 로그인(카카오/구글): POST /auth/login/kakao·google에 앱이 받은 SNS 토큰을 보내면
-  서버가 SNS API로 검증(Kakao/GoogleApiClient, member/infrastructure) 후 find-or-create + 우리 JWT 발급.
-  Apple 로그인(POST /auth/login/apple)은 물어볼 API가 없어서 AppleApiClient가 Apple 공개키(JWKS)로
-  identityToken을 직접 검증한다 (서명·iss·aud·exp·nonce). 허용 앱 ID는 APPLE_CLIENT_IDS(iOS 번들 ID), 비면 전부 거절.
-  테스트는 클라이언트를 @MockitoBean으로 대체 (AppleApiClient 자체는 테스트용 RSA 키로 단위 테스트).
-- 계정 연동: 회원(Member="사람")과 로그인 수단(AuthCredential="문", 1:N)이 분리되어 있다.
-  연동 = POST /members/me/links/kakao·google (인증된 세션 + SNS 토큰 검증, 이메일 무관),
-  해제 = DELETE /members/me/links/{provider} (마지막 수단은 409). 이메일 일치 자동 통합은
-  계정 탈취 경로라 금지 — SNS 첫 로그인 시 이메일 충돌은 409 SOCIAL_EMAIL_CONFLICT로 안내만 한다.
+- 로그인은 SNS(카카오·구글·Apple)뿐이고 이메일 가입·로그인은 없다. 첫 SNS 로그인이 곧 가입(find-or-create)이다.
+  카카오: access 토큰으로 user/me 조회 + access_token_info의 app_id가 KAKAO_APP_ID인지 확인.
+  구글·Apple: 공개키(JWKS, JwksKeyLocator)로 서버가 직접 서명 검증 + aud 확인.
+  구글 aud = GOOGLE_CLIENT_IDS(Web 클라이언트 ID, 앱이 serverClientId로 넘김), Apple aud = APPLE_CLIENT_IDS(번들 ID).
+  설정값이 비면 그 SNS 로그인은 전부 거절한다. Apple은 authorizationCode를 refresh 토큰으로 바꿔
+  AuthCredential.revokeToken에 암호화(TokenCipher, TOKEN_ENCRYPTION_KEY)해 저장한다 (탈퇴 때 취소용).
+  테스트는 SNS 클라이언트를 @MockitoBean으로 대체한다 (클라이언트 자체는 MockRestServiceServer로 단위 테스트).
+- 계정: 회원(Member="사람")과 로그인 수단(AuthCredential="문", 1:N)이 분리되어 있다.
+  같은 이메일이라도 수단이 다르면 다른 계정이다 (PRD 9.17, 이메일 유니크 아님, 이메일로 자동 통합 금지).
+  연동 API(/members/me/links/*)는 있지만 PRD상 계정 합치기는 2차라 앱은 아직 쓰지 않는다.
+  프로필 수정 = PATCH /members/me(이름). 탈퇴 = DELETE /members/me: 한 트랜잭션에서 계정을 지우고
+  withdrawal_tasks에 후처리(카카오 연결 끊기, Apple 토큰 취소, 도메인별 데이터 정리)를 등록하면
+  WithdrawalTaskWorker(@Scheduled, DB 큐, 지수 백오프 재시도)가 처리한다. 다른 도메인은
+  member의 WithdrawnMemberDataCleaner를 구현해 자기 데이터를 지운다 (DubbingDataCleaner, MemoDataCleaner).
 - 메모/태그는 소유자(Memo.memberId, id 참조) 기반: 모든 조회/수정/삭제는 로그인 회원 범위로 한정되고,
   남의 메모 접근은 404로 존재를 숨긴다 (소유권 검사는 findByIdAndMemberId 쿼리에 포함).
-  통합 테스트는 @BeforeEach에서 가입+로그인으로 토큰을 얻는다. 테스트용 application.properties는
+  통합 테스트는 @BeforeEach에서 TestMembers(src/test …/support)로 회원을 만들고 토큰을 얻는다. 테스트용 application.properties는
   main을 '대체'하므로 main에 필수 속성을 추가하면 테스트 쪽에도 같이 추가해야 한다.
-- 더빙(dubbing 도메인): Typecast TTS(TtsClient 인터페이스 → TypecastTtsClient)로 AI 목소리(PresetVoice)와
+- 더빙(dubbing 도메인): Typecast TTS(TtsClient 인터페이스 → TypecastTtsClient)로 AI 목소리(PresetVoice, 앱 목록 순서 = 선언 순서)와
   내 목소리(CustomVoice, 회원당 1개, 복제 동의 필수, 업체 voice_id는 앱에 노출 금지)를 합성한다.
   POST /dubbing-jobs는 202로 접수만 하고, DubbingJobWorker(@Scheduled, DB를 큐로 사용, for update skip locked)가
-  트랜잭션 밖에서 합성 → S3 업로드 → 조회 시 presigned URL. 키는 환경변수(TYPECAST_API_KEY, AWS_S3_BUCKET),
+  트랜잭션 밖에서 합성 → S3 업로드 → 조회 시 presigned URL. 속도는 배율(speed 0.5~2.0, Typecast audio_tempo),
+  글자 수는 200자. 더빙 시트 선택지(목소리·속도 버튼·글자 수)는 공개 API GET /dubbing-options가 준다.
+  키는 환경변수(TYPECAST_API_KEY, AWS_S3_BUCKET),
   AWS 권한은 IAM 역할/기본 자격 증명 체인. 테스트는 TtsClient·AudioStorage를 @MockitoBean으로 대체하고
   Worker는 processNext()를 직접 호출한다. 설정 가이드 `docs/s3-setup.md`, 남은 작업 `docs/dubbing-todo.md`.
 

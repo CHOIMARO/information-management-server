@@ -14,4 +14,7 @@ interface MemoRepository : JpaRepository<Memo, Long>, KotlinJdslJpqlExecutor {
 
     /** 소유권 확인을 겸하는 단건 조회: 남의 메모면 (있어도) null을 돌려준다. */
     fun findByIdAndMemberId(id: Long, memberId: Long): Memo?
+
+    /** 탈퇴한 회원의 메모 전체 (데이터 정리용) */
+    fun findAllByMemberId(memberId: Long): List<Memo>
 }

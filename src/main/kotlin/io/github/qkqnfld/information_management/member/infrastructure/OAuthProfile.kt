@@ -9,9 +9,16 @@ import io.github.qkqnfld.information_management.member.domain.AuthProvider
  */
 data class OAuthProfile(
     val provider: AuthProvider,
-    /** SNS 쪽 사용자 고유 id (카카오 회원번호, 구글 sub) */
+    /** SNS 쪽 사용자 고유 id (카카오 회원번호, 구글 sub, Apple sub) */
     val providerId: String,
     /** 동의 항목에 따라 없을 수 있다 */
     val email: String?,
     val nickname: String?,
+    /** 프로필 사진 주소. 동의하지 않았거나 Apple 로그인이면 없다 */
+    val profileImageUrl: String? = null,
+    /**
+     * 토큰을 받은 앱의 ID (토큰의 aud). Apple만 채운다.
+     * Apple 토큰 교환·취소 요청의 client_id는 토큰을 받은 앱과 같아야 하기 때문이다.
+     */
+    val clientId: String? = null,
 )

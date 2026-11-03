@@ -60,7 +60,7 @@ class OpenApiConfig {
     }
 
     private fun isPublic(method: PathItem.HttpMethod, path: String): Boolean =
-        path.startsWith("/auth/") || (method == PathItem.HttpMethod.POST && path == "/members")
+        path.startsWith("/auth/") || (method == PathItem.HttpMethod.GET && path == "/dubbing-options")
 
     companion object {
         private const val BEARER_AUTH = "bearerAuth"

@@ -9,8 +9,6 @@ import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
-import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 import tools.jackson.databind.ObjectMapper
@@ -27,10 +25,6 @@ class SecurityConfig(
     private val objectMapper: ObjectMapper,
 ) {
 
-    /** BCrypt 해싱기. 같은 비밀번호라도 매번 다른 해시가 나오는 적응형 단방향 해시다. */
-    @Bean
-    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
-
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         return http
@@ -40,11 +34,12 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it
-                    // 인증 없이 접근 가능한 문: 회원가입, 인증 관련 전체(/auth/**).
-                    // /auth/**는 로그인 전(자체/SNS 로그인)이거나 access 만료 후(재발급/로그아웃)에
+                    // 인증 없이 접근 가능한 문: 인증 관련 전체(/auth/**).
+                    // /auth/**는 로그인 전(SNS 로그인 = 가입)이거나 access 만료 후(재발급/로그아웃)에
                     // 호출되는 API들이라 전부 열어둔다 — 각자 본문의 자격 증명이 검증 역할을 한다
-                    .requestMatchers(HttpMethod.POST, "/members").permitAll()
                     .requestMatchers("/auth/**").permitAll()
+                    // 더빙 시트의 목소리·속도 목록. 로그인 전에도 시트를 열 수 있어야 한다 (PRD D68)
+                    .requestMatchers(HttpMethod.GET, "/dubbing-options").permitAll()
                     // (개발용) API 테스트 페이지. 로그인 전에도 열려야 하므로 GET만 허용한다
                     .requestMatchers(HttpMethod.GET, "/test.html").permitAll()
                     // (개발용) API 문서. 운영에서는 springdoc을 꺼서 이 경로들이 404가 된다

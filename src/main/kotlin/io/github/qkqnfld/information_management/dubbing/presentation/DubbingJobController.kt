@@ -43,7 +43,7 @@ class DubbingJobController(
         @AuthenticationPrincipal memberId: Long,
         @Valid @RequestBody request: CreateDubbingJobRequest,
     ): ResponseEntity<DubbingJobResponse> {
-        val result = dubbingJobService.create(memberId, request.text, request.presetVoice, request.customVoiceId)
+        val result = dubbingJobService.create(memberId, request.text, request.presetVoice, request.customVoiceId, request.speed)
         return ResponseEntity
             .accepted()
             .location(URI.create("/dubbing-jobs/${result.job.id}"))

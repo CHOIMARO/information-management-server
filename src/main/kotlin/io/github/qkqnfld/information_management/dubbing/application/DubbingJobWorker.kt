@@ -42,7 +42,7 @@ class DubbingJobWorker(
     fun processNext() {
         val task = dubbingJobService.claimNext() ?: return
         try {
-            val audio = ttsClient.synthesize(task.text, task.voice)
+            val audio = ttsClient.synthesize(task.text, task.voice, task.speed)
             val audioKey = "dubbings/${task.memberId}/${task.jobId}.mp3"
             audioStorage.upload(audioKey, audio, AUDIO_CONTENT_TYPE)
             if (!dubbingJobService.complete(task.jobId, audioKey)) {

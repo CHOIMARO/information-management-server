@@ -43,17 +43,17 @@ class AccountLinkApiTest {
 
     private fun uniqueId(): String = "link-${System.nanoTime()}"
 
-    /** 자체 회원가입 + 로그인 → access 토큰 */
-    private fun signupAndLogin(email: String): String {
-        mockMvc.perform(
-            post("/members")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123","nickname":"연동테스터"}"""),
-        ).andExpect(status().isCreated)
+    /** 구글로 처음 로그인(가입)해 access 토큰을 받는다. 연동 테스트의 "기존 계정"이 된다. */
+    private fun signupWithGoogle(): String {
+        val providerId = uniqueId()
+        val snsToken = "google-$providerId"
+        whenever(googleApiClient.fetchProfile(snsToken)).thenReturn(
+            OAuthProfile(AuthProvider.GOOGLE, providerId, "$providerId@gmail.com", "연동테스터"),
+        )
         val body = mockMvc.perform(
-            post("/auth/login")
+            post("/auth/login/google")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123"}"""),
+                .content("""{"token":"$snsToken"}"""),
         ).andExpect(status().isOk).andReturn().response.contentAsString
         return Regex("\"accessToken\":\"([^\"]+)\"").find(body)!!.groupValues[1]
     }
@@ -75,7 +75,7 @@ class AccountLinkApiTest {
     fun `이메일이 달라도 카카오 계정을 연동할 수 있고, 이후 카카오 로그인은 같은 계정에 도착한다`() {
         val providerId = uniqueId()
         // 회원 이메일(gmail)과 카카오 이메일(naver)이 다르다 — 연동은 이메일과 무관해야 한다
-        val access = signupAndLogin("$providerId@gmail.com")
+        val access = signupWithGoogle()
         whenever(kakaoApiClient.fetchProfile("link-token-1")).thenReturn(
             OAuthProfile(AuthProvider.KAKAO, providerId, "$providerId@naver.com", "카카오유저"),
         )
@@ -101,7 +101,7 @@ class AccountLinkApiTest {
     @Test
     fun `Apple 계정을 연동하면 이후 Apple 로그인은 같은 계정에 도착한다`() {
         val providerId = uniqueId()
-        val access = signupAndLogin("$providerId@gmail.com")
+        val access = signupWithGoogle()
         whenever(appleApiClient.fetchProfile("apple-link-token", "link-nonce")).thenReturn(
             OAuthProfile(AuthProvider.APPLE, providerId, null, null),
         )
@@ -140,7 +140,7 @@ class AccountLinkApiTest {
         ).andExpect(status().isOk)
 
         // 두 번째 회원이 같은 카카오 계정을 연동 시도
-        val otherAccess = signupAndLogin("${uniqueId()}@test.com")
+        val otherAccess = signupWithGoogle()
         linkKakao(otherAccess, "stolen-token")
             .andExpect(status().isConflict)
             .andExpect(jsonPath("$.code").value("SNS_ALREADY_LINKED"))
@@ -148,7 +148,7 @@ class AccountLinkApiTest {
 
     @Test
     fun `같은 provider의 수단을 두 번 연동하면 409를 응답한다`() {
-        val access = signupAndLogin("${uniqueId()}@test.com")
+        val access = signupWithGoogle()
         whenever(kakaoApiClient.fetchProfile("dup-link-1")).thenReturn(
             OAuthProfile(AuthProvider.KAKAO, uniqueId(), null, null),
         )
@@ -164,7 +164,7 @@ class AccountLinkApiTest {
 
     @Test
     fun `연동을 해제하면 수단 목록에서 사라진다`() {
-        val access = signupAndLogin("${uniqueId()}@test.com")
+        val access = signupWithGoogle()
         whenever(kakaoApiClient.fetchProfile("unlink-token")).thenReturn(
             OAuthProfile(AuthProvider.KAKAO, uniqueId(), null, null),
         )
@@ -175,24 +175,24 @@ class AccountLinkApiTest {
 
         mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
             .andExpect(jsonPath("$.providers.length()").value(1))
-            .andExpect(jsonPath("$.providers[0]").value("LOCAL"))
+            .andExpect(jsonPath("$.providers[0]").value("GOOGLE"))
     }
 
     @Test
     fun `마지막 남은 로그인 수단은 해제할 수 없다`() {
-        // LOCAL 수단 하나뿐인 회원이 그것을 해제하려 하면 계정에 잠겨버린다 → 409
-        val access = signupAndLogin("${uniqueId()}@test.com")
+        // 구글 수단 하나뿐인 회원이 그것을 해제하려 하면 계정에 잠겨버린다 → 409
+        val access = signupWithGoogle()
 
-        mockMvc.perform(delete("/members/me/links/LOCAL").header("Authorization", "Bearer $access"))
+        mockMvc.perform(delete("/members/me/links/GOOGLE").header("Authorization", "Bearer $access"))
             .andExpect(status().isConflict)
             .andExpect(jsonPath("$.code").value("LAST_LOGIN_METHOD"))
     }
 
     @Test
     fun `연결되지 않은 수단을 해제하면 404를 응답한다`() {
-        val access = signupAndLogin("${uniqueId()}@test.com")
+        val access = signupWithGoogle()
 
-        mockMvc.perform(delete("/members/me/links/GOOGLE").header("Authorization", "Bearer $access"))
+        mockMvc.perform(delete("/members/me/links/KAKAO").header("Authorization", "Bearer $access"))
             .andExpect(status().isNotFound)
             .andExpect(jsonPath("$.code").value("CREDENTIAL_NOT_FOUND"))
     }

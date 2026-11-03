@@ -21,7 +21,7 @@ class DubbingJob(
     @Column(nullable = false)
     val memberId: Long,
 
-    /** 읽을 텍스트 (Typecast 요청당 최대 2,000자) */
+    /** 읽을 텍스트. 요청은 MAX_TEXT_LENGTH까지 받는다 (컬럼은 Typecast 한도인 2,000자). */
     @Column(nullable = false, length = 2000)
     val text: String,
 
@@ -38,6 +38,10 @@ class DubbingJob(
     @Column
     val customVoiceId: Long? = null,
 
+    /** 읽기 속도 배율 (DubbingSpeed 참고). 1.0이 보통 속도다. */
+    @Column(nullable = false)
+    val speed: Double = DubbingSpeed.DEFAULT,
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
@@ -49,6 +53,7 @@ class DubbingJob(
         require((presetVoice == null) != (customVoiceId == null)) {
             "presetVoice와 customVoiceId 중 정확히 하나만 지정해야 합니다"
         }
+        require(speed in DubbingSpeed.MIN..DubbingSpeed.MAX) { "속도는 ${DubbingSpeed.MIN}~${DubbingSpeed.MAX} 사이여야 합니다" }
     }
 
     @Enumerated(EnumType.STRING)
@@ -121,6 +126,9 @@ class DubbingJob(
     fun hasAttemptsLeft(maxAttempts: Int): Boolean = attempts < maxAttempts
 
     companion object {
+        /** 한 번에 더빙할 수 있는 최대 글자 수 (PRD 9.5). Typecast는 글자 수로 과금하므로 크레딧도 보호한다. */
+        const val MAX_TEXT_LENGTH = 200
+
         private const val MAX_REASON_LENGTH = 500
     }
 }

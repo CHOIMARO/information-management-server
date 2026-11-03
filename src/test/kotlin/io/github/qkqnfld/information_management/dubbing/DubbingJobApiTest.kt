@@ -8,6 +8,7 @@ import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsClient
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsErrorType
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsException
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsVoice
+import io.github.qkqnfld.information_management.support.TestMembers
 import org.hamcrest.Matchers.endsWith
 import org.junit.jupiter.api.BeforeEach
 import org.mockito.kotlin.any
@@ -48,6 +49,9 @@ class DubbingJobApiTest {
     private lateinit var mockMvc: MockMvc
 
     @Autowired
+    private lateinit var testMembers: TestMembers
+
+    @Autowired
     private lateinit var worker: DubbingJobWorker
 
     @Autowired
@@ -68,28 +72,28 @@ class DubbingJobApiTest {
     @BeforeEach
     fun setUp() {
         dubbingJobRepository.deleteAll()
-        token = registerAndLogin()
-        whenever(ttsClient.synthesize(any(), any())).thenReturn(byteArrayOf(1, 2, 3))
+        token = testMembers.newMemberToken()
+        whenever(ttsClient.synthesize(any(), any(), any())).thenReturn(byteArrayOf(1, 2, 3))
         whenever(audioStorage.createDownloadUrl(any())).thenReturn("https://s3.test/presigned-url")
     }
 
     @Test
     fun `AI 목소리로 더빙을 요청하면 202와 PENDING 상태, 상태 조회 주소를 응답한다`() {
-        createJob("""{"text":"안녕하세요","presetVoice":"DYLAN"}""")
+        createJob("""{"text":"안녕하세요","presetVoice":"SEOHYEON"}""")
             .andExpect(status().isAccepted)
             .andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/dubbing-jobs/")))
             .andExpect(jsonPath("$.status").value("PENDING"))
-            .andExpect(jsonPath("$.presetVoice").value("DYLAN"))
+            .andExpect(jsonPath("$.presetVoice").value("SEOHYEON"))
             .andExpect(jsonPath("$.audioUrl").doesNotExist())
     }
 
     @Test
     fun `Worker가 처리하면 COMPLETED가 되고 다운로드 URL이 생긴다`() {
-        val jobId = createJobId("""{"text":"안녕하세요","presetVoice":"DYLAN"}""")
+        val jobId = createJobId("""{"text":"안녕하세요","presetVoice":"SEOHYEON"}""")
 
         worker.processNext()
 
-        verify(ttsClient).synthesize("안녕하세요", TtsVoice.Preset(PresetVoice.DYLAN))
+        verify(ttsClient).synthesize("안녕하세요", TtsVoice.Preset(PresetVoice.SEOHYEON), 1.0)
         verify(audioStorage).upload(argThat { startsWith("dubbings/") && endsWith("/$jobId.mp3") }, any(), eq("audio/mpeg"))
         mockMvc.perform(get("/dubbing-jobs/$jobId").authed())
             .andExpect(status().isOk)
@@ -105,7 +109,7 @@ class DubbingJobApiTest {
 
         worker.processNext()
 
-        verify(ttsClient).synthesize("내 목소리 테스트", TtsVoice.Custom("uc_my_voice"))
+        verify(ttsClient).synthesize("내 목소리 테스트", TtsVoice.Custom("uc_my_voice"), 1.0)
         mockMvc.perform(get("/dubbing-jobs/$jobId").authed())
             .andExpect(jsonPath("$.status").value("COMPLETED"))
             .andExpect(jsonPath("$.customVoiceId").value(voiceId))
@@ -113,7 +117,7 @@ class DubbingJobApiTest {
 
     @Test
     fun `남의 목소리로는 더빙할 수 없고 404를 응답한다`() {
-        val othersVoiceId = registerVoice("uc_others", withToken = registerAndLogin())
+        val othersVoiceId = registerVoice("uc_others", withToken = testMembers.newMemberToken())
 
         createJob("""{"text":"훔친 목소리","customVoiceId":$othersVoiceId}""")
             .andExpect(status().isNotFound)
@@ -122,7 +126,7 @@ class DubbingJobApiTest {
 
     @Test
     fun `목소리를 둘 다 지정하거나 하나도 지정하지 않으면 400을 응답한다`() {
-        createJob("""{"text":"둘 다","presetVoice":"DYLAN","customVoiceId":1}""")
+        createJob("""{"text":"둘 다","presetVoice":"SEOHYEON","customVoiceId":1}""")
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.fieldErrors[0].field").value("voiceSelectedOnce"))
 
@@ -132,20 +136,49 @@ class DubbingJobApiTest {
     }
 
     @Test
-    fun `텍스트가 비었거나 2000자를 넘으면 400을 응답한다`() {
-        createJob("""{"text":"  ","presetVoice":"DYLAN"}""")
+    fun `속도를 보내면 그 배율로 합성하고 응답에 담는다`() {
+        val jobId = createJobId("""{"text":"빠르게","presetVoice":"JINWOO","speed":1.35}""")
+
+        worker.processNext()
+
+        verify(ttsClient).synthesize("빠르게", TtsVoice.Preset(PresetVoice.JINWOO), 1.35)
+        mockMvc.perform(get("/dubbing-jobs/$jobId").authed())
+            .andExpect(jsonPath("$.speed").value(1.35))
+    }
+
+    @Test
+    fun `속도를 보내지 않으면 보통 속도(1_0)다`() {
+        createJob("""{"text":"보통","presetVoice":"SEOHYEON"}""")
+            .andExpect(status().isAccepted)
+            .andExpect(jsonPath("$.speed").value(1.0))
+    }
+
+    @Test
+    fun `속도가 0_5~2_0 범위를 벗어나면 400을 응답한다`() {
+        createJob("""{"text":"너무 느림","presetVoice":"SEOHYEON","speed":0.4}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("speed"))
+
+        createJob("""{"text":"너무 빠름","presetVoice":"SEOHYEON","speed":2.1}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("speed"))
+    }
+
+    @Test
+    fun `텍스트가 비었거나 200자를 넘으면 400을 응답한다`() {
+        createJob("""{"text":"  ","presetVoice":"SEOHYEON"}""")
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.fieldErrors[0].field").value("text"))
 
-        createJob("""{"text":"${"가".repeat(2001)}","presetVoice":"DYLAN"}""")
+        createJob("""{"text":"${"가".repeat(201)}","presetVoice":"SEOHYEON"}""")
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.fieldErrors[0].field").value("text"))
     }
 
     @Test
     fun `일시적인 오류는 다시 시도하고 3번 실패하면 FAILED가 된다`() {
-        whenever(ttsClient.synthesize(any(), any())).thenThrow(TtsException(TtsErrorType.TEMPORARY, "429"))
-        val jobId = createJobId("""{"text":"재시도","presetVoice":"DYLAN"}""")
+        whenever(ttsClient.synthesize(any(), any(), any())).thenThrow(TtsException(TtsErrorType.TEMPORARY, "429"))
+        val jobId = createJobId("""{"text":"재시도","presetVoice":"SEOHYEON"}""")
 
         worker.processNext()
         mockMvc.perform(get("/dubbing-jobs/$jobId").authed())
@@ -154,7 +187,7 @@ class DubbingJobApiTest {
         worker.processNext()
         worker.processNext()
 
-        verify(ttsClient, times(3)).synthesize(any(), any())
+        verify(ttsClient, times(3)).synthesize(any(), any(), any())
         mockMvc.perform(get("/dubbing-jobs/$jobId").authed())
             .andExpect(jsonPath("$.status").value("FAILED"))
             .andExpect(jsonPath("$.audioUrl").doesNotExist())
@@ -162,8 +195,8 @@ class DubbingJobApiTest {
 
     @Test
     fun `입력 오류는 다시 시도하지 않고 바로 FAILED가 된다`() {
-        whenever(ttsClient.synthesize(any(), any())).thenThrow(TtsException(TtsErrorType.INVALID_INPUT, "422"))
-        val jobId = createJobId("""{"text":"입력 오류","presetVoice":"DYLAN"}""")
+        whenever(ttsClient.synthesize(any(), any(), any())).thenThrow(TtsException(TtsErrorType.INVALID_INPUT, "422"))
+        val jobId = createJobId("""{"text":"입력 오류","presetVoice":"SEOHYEON"}""")
 
         worker.processNext()
 
@@ -174,7 +207,7 @@ class DubbingJobApiTest {
     @Test
     fun `S3 업로드가 실패하면 다시 시도한다`() {
         whenever(audioStorage.upload(any(), any(), any())).thenThrow(RuntimeException("S3 down"))
-        val jobId = createJobId("""{"text":"업로드 실패","presetVoice":"DYLAN"}""")
+        val jobId = createJobId("""{"text":"업로드 실패","presetVoice":"SEOHYEON"}""")
 
         worker.processNext()
 
@@ -197,7 +230,7 @@ class DubbingJobApiTest {
 
     @Test
     fun `남의 작업은 조회할 수 없고 404를 응답한다`() {
-        val othersJobId = createJobId("""{"text":"남의 작업","presetVoice":"DYLAN"}""", withToken = registerAndLogin())
+        val othersJobId = createJobId("""{"text":"남의 작업","presetVoice":"SEOHYEON"}""", withToken = testMembers.newMemberToken())
 
         mockMvc.perform(get("/dubbing-jobs/$othersJobId").authed())
             .andExpect(status().isNotFound)
@@ -206,9 +239,9 @@ class DubbingJobApiTest {
 
     @Test
     fun `목록에는 내 작업만 최신순으로 보인다`() {
-        createJobId("""{"text":"첫 번째","presetVoice":"DYLAN"}""")
-        createJobId("""{"text":"두 번째","presetVoice":"DYLAN"}""")
-        createJobId("""{"text":"남의 작업","presetVoice":"DYLAN"}""", withToken = registerAndLogin())
+        createJobId("""{"text":"첫 번째","presetVoice":"SEOHYEON"}""")
+        createJobId("""{"text":"두 번째","presetVoice":"SEOHYEON"}""")
+        createJobId("""{"text":"남의 작업","presetVoice":"SEOHYEON"}""", withToken = testMembers.newMemberToken())
 
         mockMvc.perform(get("/dubbing-jobs").authed())
             .andExpect(status().isOk)
@@ -219,7 +252,7 @@ class DubbingJobApiTest {
 
     @Test
     fun `작업을 삭제하면 S3 파일도 지우고 다시 조회하면 404다`() {
-        val jobId = createJobId("""{"text":"삭제 테스트","presetVoice":"DYLAN"}""")
+        val jobId = createJobId("""{"text":"삭제 테스트","presetVoice":"SEOHYEON"}""")
         worker.processNext()
 
         mockMvc.perform(delete("/dubbing-jobs/$jobId").authed())
@@ -259,21 +292,6 @@ class DubbingJobApiTest {
         return Regex("\"id\":(\\d+)").find(body)!!.groupValues[1].toLong()
     }
 
-    private fun registerAndLogin(): String {
-        val email = "dubbing-tester-${System.nanoTime()}@test.com"
-        mockMvc.perform(
-            post("/members")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123","nickname":"더빙테스터"}"""),
-        ).andExpect(status().isCreated)
-
-        val body = mockMvc.perform(
-            post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123"}"""),
-        ).andExpect(status().isOk).andReturn().response.contentAsString
-        return Regex("\"accessToken\":\"([^\"]+)\"").find(body)!!.groupValues[1]
-    }
 
     /**
      * 요청에 인증 토큰을 싣는다. Spring 7에서는 일반 요청 빌더와 multipart 요청 빌더의

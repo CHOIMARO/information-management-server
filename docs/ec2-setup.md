@@ -137,7 +137,24 @@ SPRINGDOC_SWAGGER_UI_ENABLED=false
 - 값에 따옴표를 붙이지 않는다. Docker는 따옴표까지 값으로 읽는다.
 - `export`를 붙이지 않는다. 이 파일은 셸 스크립트가 아니라 Docker 환경변수 파일이다.
 - API 문서(Swagger UI)는 개발용이다. 개발 서버에서는 `http://<서버 IP>/swagger-ui.html`, 로컬에서는 `http://localhost:8080/swagger-ui.html`로 연다.
-- iOS 앱의 Apple 로그인을 쓰려면 `APPLE_CLIENT_IDS=<iOS 번들 ID>` 줄을 추가한다. 없으면 Apple 로그인은 모두 거절된다.
+- SNS 로그인과 탈퇴에 필요한 줄을 추가한다. 값이 없는 SNS의 로그인은 모두 401로 거절된다.
+
+  ```
+  KAKAO_APP_ID=<카카오 앱 ID (숫자)>
+  KAKAO_ADMIN_KEY=<카카오 어드민 키>
+  GOOGLE_CLIENT_IDS=<구글 Web 클라이언트 ID>
+  APPLE_CLIENT_IDS=<iOS 번들 ID>
+  APPLE_TEAM_ID=<Apple Team ID>
+  APPLE_KEY_ID=<Sign in with Apple 키의 Key ID>
+  APPLE_PRIVATE_KEY=<.p8 파일 내용을 한 줄로: BEGIN/END 줄을 빼고 Base64 본문만>
+  TOKEN_ENCRYPTION_KEY=<openssl rand -base64 32 결과>
+  ```
+
+  - `KAKAO_APP_ID`는 카카오 developers > 내 애플리케이션 > 앱 설정 > 요약 정보의 숫자 앱 ID다. 앱 키가 아니다.
+  - `KAKAO_ADMIN_KEY`는 탈퇴할 때 카카오 연결 끊기에만 쓴다. 모든 사용자를 다룰 수 있는 키다. 카카오 콘솔에서 어드민 키의 "사용 가능 API"를 연결 끊기로 제한하고, "호출 허용 IP"에 EC2의 공인 IP를 등록한다.
+  - `GOOGLE_CLIENT_IDS`는 Android·iOS 클라이언트 ID가 아니라 **Web 클라이언트 ID**다. 앱이 이 값을 serverClientId로 넘기면 idToken의 aud가 이 값이 된다.
+  - `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `TOKEN_ENCRYPTION_KEY`가 없으면 Apple 로그인은 되지만, 탈퇴할 때 Apple 토큰을 취소하지 못한다 (App Store 심사 요구 사항).
+  - 주의: `TOKEN_ENCRYPTION_KEY`를 바꾸면 이미 저장한 Apple 토큰을 읽을 수 없다. 한 번 정하면 바꾸지 않는다.
 - Spring Boot는 `JWT_SECRET`을 `jwt.secret` 속성으로 읽는다 (relaxed binding: 대문자·밑줄 이름을 소문자·점 이름에 자동으로 맞춘다).
 - 주의: `JWT_SECRET`을 바꾸면 이미 발급된 토큰이 모두 무효가 된다. 사용자는 다시 로그인해야 한다.
 - 주의: S3 설정을 마치기 전에는 `TYPECAST_API_KEY` 줄을 비워 둔다. 키만 있으면 더빙 1건마다 크레딧을 여러 번 쓴다 (`docs/dubbing-todo.md` 2-1).
@@ -168,7 +185,8 @@ curl -i http://<서버 IP>/voices
 ```
 
 `401`과 `{"code":"UNAUTHORIZED",...}`가 오면 정상이다. 서버가 떠 있고 인증 검사까지 동작한다는 뜻이다.
-그 다음 `memos.http`의 주소를 `http://<서버 IP>`로 바꿔 가입·로그인·메모 요청을 시험한다.
+`curl -i http://<서버 IP>/dubbing-options`는 로그인 없이 `200`이 와야 한다.
+그 다음 `memos.http`의 주소를 `http://<서버 IP>`로 바꿔 SNS 로그인·더빙 요청을 시험한다.
 
 ## 7. 새 버전 배포 (업데이트)
 
@@ -184,6 +202,8 @@ docker run -d --name magic-editor-server --restart unless-stopped -p 80:8080 \
 - 컨테이너를 바꾸는 몇 초 동안 서버가 응답하지 않는다.
 - 문제가 생기면 이전 커밋의 이미지로 되돌린다. CI는 커밋마다 `sha-<커밋 앞 7자리>` 태그를 함께 올린다.
   예: `ghcr.io/choimaro/information-management-server:sha-45d5d8c`
+- 주의: 새 버전이 DB 마이그레이션(V 파일)을 적용했다면 그 이전 이미지로는 되돌릴 수 없다. 이전 코드는 바뀐 테이블과 맞지 않아 시작하지 못한다 (`ddl-auto=validate`).
+  예: V3(이메일 로그인 제거) 이후에는 V3 이전 이미지가 뜨지 않는다. 이때는 문제를 고친 새 커밋을 배포한다.
 
 ## 8. (선택) 버지니아 데이터 옮기기
 

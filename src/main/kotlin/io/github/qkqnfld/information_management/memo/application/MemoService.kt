@@ -74,6 +74,12 @@ class MemoService(
         memoRepository.delete(memo)
     }
 
+    /** 탈퇴한 회원의 메모를 모두 지운다. 태그 연결(MemoTag)은 cascade로 함께 지워진다. 태그 자체는 전 회원 공유라 남긴다. */
+    @Transactional
+    fun deleteAllOfMember(memberId: Long) {
+        memoRepository.deleteAll(memoRepository.findAllByMemberId(memberId))
+    }
+
     /**
      * 이름 목록으로 태그를 조회하고, 없는 이름은 새로 만들어 함께 반환한다 (find-or-create).
      * 공백을 다듬고 빈 이름과 중복을 제거한 뒤, 요청에 적힌 순서를 유지한다.

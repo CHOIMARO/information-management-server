@@ -15,6 +15,9 @@ interface DubbingJobRepository : JpaRepository<DubbingJob, Long> {
 
     fun findAllByMemberId(memberId: Long, pageable: Pageable): Page<DubbingJob>
 
+    /** 탈퇴한 회원의 작업 전체 (데이터 정리용) */
+    fun findAllByMemberId(memberId: Long): List<DubbingJob>
+
     /**
      * Worker가 처리할 다음 작업 하나를 가져오고 그 행을 잠근다.
      * 대상: 대기 중(PENDING)인 작업, 또는 처리 도중 서버가 멈춰 PROCESSING에 오래 남은 작업.

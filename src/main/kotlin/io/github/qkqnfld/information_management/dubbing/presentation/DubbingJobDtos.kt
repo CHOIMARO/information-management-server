@@ -1,10 +1,14 @@
 package io.github.qkqnfld.information_management.dubbing.presentation
 
 import io.github.qkqnfld.information_management.dubbing.application.DubbingJobResult
+import io.github.qkqnfld.information_management.dubbing.domain.DubbingJob
 import io.github.qkqnfld.information_management.dubbing.domain.DubbingJobStatus
+import io.github.qkqnfld.information_management.dubbing.domain.DubbingSpeed
 import io.github.qkqnfld.information_management.dubbing.domain.PresetVoice
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.AssertTrue
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.LocalDateTime
@@ -15,14 +19,22 @@ import java.time.LocalDateTime
  */
 data class CreateDubbingJobRequest(
     @field:NotBlank(message = "텍스트는 비어 있을 수 없습니다")
-    @field:Size(max = 2000, message = "텍스트는 2000자 이하여야 합니다")
+    @field:Size(max = DubbingJob.MAX_TEXT_LENGTH, message = "텍스트는 200자 이하여야 합니다")
     val text: String,
 
-    /** GET /voices의 presets[].id 값 */
+    /** GET /dubbing-options의 voices[].id 값 */
     val presetVoice: PresetVoice? = null,
 
     /** GET /voices의 custom[].id 값 */
     val customVoiceId: Long? = null,
+
+    /**
+     * 읽기 속도 배율 (0.5~2.0). 보내지 않으면 1.0(보통)이다.
+     * 버튼 값은 GET /dubbing-options의 speed.presets에 있다. [구간에 맞추기]는 앱이 계산한 배율을 보낸다.
+     */
+    @field:DecimalMin(value = "0.5", message = "속도는 0.5 이상이어야 합니다")
+    @field:DecimalMax(value = "2.0", message = "속도는 2.0 이하여야 합니다")
+    val speed: Double = DubbingSpeed.DEFAULT,
 ) {
     // 검증용 계산 값이다. 앱이 보내는 필드가 아니므로 API 문서에서 숨긴다
     @get:Schema(hidden = true)
@@ -39,6 +51,8 @@ data class DubbingJobResponse(
     val presetVoice: PresetVoice?,
     /** 내 목소리 id. 그 목소리가 삭제되었으면 null이다. */
     val customVoiceId: Long?,
+    /** 읽기 속도 배율 */
+    val speed: Double,
     /**
      * 결과 파일 다운로드 URL (COMPLETED일 때만 값이 있다).
      * 몇 분 뒤 만료된다. 만료되면 이 작업을 다시 조회해 새 URL을 받는다.
@@ -56,6 +70,7 @@ data class DubbingJobResponse(
                 text = job.text,
                 presetVoice = job.presetVoice,
                 customVoiceId = job.customVoiceId,
+                speed = job.speed,
                 audioUrl = result.audioUrl,
                 createdAt = job.createdAt,
                 completedAt = job.completedAt,

@@ -11,9 +11,10 @@ interface TtsClient {
 
     /**
      * text를 voice로 읽은 mp3 데이터를 반환한다.
+     * @param speed 읽기 속도 배율 (1.0이 보통 속도)
      * @throws TtsException 업체 호출이 실패했을 때
      */
-    fun synthesize(text: String, voice: TtsVoice): ByteArray
+    fun synthesize(text: String, voice: TtsVoice, speed: Double): ByteArray
 
     /**
      * 녹음 샘플로 목소리를 복제하고, 업체가 발급한 목소리 id를 반환한다.

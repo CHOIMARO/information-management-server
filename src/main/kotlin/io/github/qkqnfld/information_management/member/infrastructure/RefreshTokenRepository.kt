@@ -16,4 +16,7 @@ interface RefreshTokenRepository : JpaRepository<RefreshToken, Long> {
 
     /** 만료 시각이 기준 시각 이전인 토큰을 전부 삭제하고 삭제 건수를 반환한다 (정리 배치용). */
     fun deleteByExpiresAtBefore(cutoff: LocalDateTime): Long
+
+    /** 탈퇴: 이 회원의 refresh 토큰을 모두 삭제한다. 다른 기기의 로그인도 함께 끊긴다. */
+    fun deleteByMemberId(memberId: Long): Long
 }

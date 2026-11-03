@@ -107,41 +107,44 @@ class SnsLoginApiTest {
     }
 
     @Test
-    fun `이미 자체 가입된 이메일로 SNS 첫 로그인을 하면 409를 응답한다`() {
-        val email = "${uniqueId()}@dup.com"
-        mockMvc.perform(
-            post("/members")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123","nickname":"자체가입"}"""),
-        ).andExpect(status().isCreated)
-
-        whenever(kakaoApiClient.fetchProfile("dup-email-token")).thenReturn(
-            OAuthProfile(AuthProvider.KAKAO, uniqueId(), email, "중복유저"),
+    fun `같은 이메일이라도 다른 SNS로 처음 로그인하면 다른 계정으로 가입된다`() {
+        // PRD 9.17: 계정은 로그인 수단과 고유 ID로 구분한다. 이메일만 보고 합치면 남의 계정이 넘어갈 수 있다
+        val email = "${uniqueId()}@same.com"
+        whenever(kakaoApiClient.fetchProfile("same-email-kakao")).thenReturn(
+            OAuthProfile(AuthProvider.KAKAO, uniqueId(), email, "카카오쪽"),
+        )
+        whenever(googleApiClient.fetchProfile("same-email-google")).thenReturn(
+            OAuthProfile(AuthProvider.GOOGLE, uniqueId(), email, "구글쪽"),
         )
 
-        // 자동 통합은 계정 탈취 경로가 되므로, 기존 방식으로 로그인 후 연동하라는 안내 코드를 준다
-        snsLogin("/auth/login/kakao", "dup-email-token")
-            .andExpect(status().isConflict)
-            .andExpect(jsonPath("$.code").value("SOCIAL_EMAIL_CONFLICT"))
+        val kakaoMemberId = memberIdOf(snsLoginAccess("/auth/login/kakao", "same-email-kakao"))
+        val googleMemberId = memberIdOf(snsLoginAccess("/auth/login/google", "same-email-google"))
+
+        assert(kakaoMemberId != googleMemberId) { "이메일이 같아도 자동으로 합치면 안 된다" }
     }
 
     @Test
-    fun `SNS 가입 계정의 이메일로 비밀번호 로그인을 시도하면 401을 응답한다`() {
-        val providerId = uniqueId()
-        val email = "$providerId@kakao.com"
-        whenever(kakaoApiClient.fetchProfile("kakao-token-3")).thenReturn(
-            OAuthProfile(AuthProvider.KAKAO, providerId, email, "비번없는유저"),
+    fun `SNS 이름이 20자를 넘으면 20자로 잘라서 가입한다`() {
+        whenever(googleApiClient.fetchProfile("long-name-token")).thenReturn(
+            OAuthProfile(AuthProvider.GOOGLE, uniqueId(), null, "Christopher Alexander Montgomery"),
         )
-        snsLogin("/auth/login/kakao", "kakao-token-3").andExpect(status().isOk)
 
-        // SNS 계정은 비밀번호가 없으므로(null) 어떤 비밀번호로도 로그인 불가
-        mockMvc.perform(
-            post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123"}"""),
+        val access = snsLoginAccess("/auth/login/google", "long-name-token")
+
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
+            .andExpect(jsonPath("$.nickname").value("Christopher Alexande"))
+    }
+
+    @Test
+    fun `SNS가 프로필 사진을 주면 내 정보에 담는다`() {
+        whenever(googleApiClient.fetchProfile("picture-token")).thenReturn(
+            OAuthProfile(AuthProvider.GOOGLE, uniqueId(), null, "사진유저", "https://lh3.googleusercontent.com/a/photo"),
         )
-            .andExpect(status().isUnauthorized)
-            .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+
+        val access = snsLoginAccess("/auth/login/google", "picture-token")
+
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
+            .andExpect(jsonPath("$.profileImageUrl").value("https://lh3.googleusercontent.com/a/photo"))
     }
 
     @Test
@@ -185,7 +188,7 @@ class SnsLoginApiTest {
         val access = appleLoginAccess("""{"token":"apple-token-3","nickname":"  "}""")
 
         mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
-            .andExpect(jsonPath("$.nickname").value("사용자"))
+            .andExpect(jsonPath("$.nickname").value("magic 사용자"))
     }
 
     @Test
@@ -198,8 +201,8 @@ class SnsLoginApiTest {
     }
 
     @Test
-    fun `Apple 로그인 이름이 20자를 넘으면 400을 응답한다`() {
-        appleLogin("""{"token":"apple-token-4","nickname":"${"가".repeat(21)}"}""")
+    fun `Apple 로그인 이름이 100자를 넘으면 400을 응답한다`() {
+        appleLogin("""{"token":"apple-token-4","nickname":"${"가".repeat(101)}"}""")
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
             .andExpect(jsonPath("$.fieldErrors[0].field").value("nickname"))

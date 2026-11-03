@@ -77,28 +77,6 @@
 
   <div class="grid">
     <div>
-      <!-- ===== 회원가입 ===== -->
-      <div class="card">
-        <h2>회원가입 (POST /members)</h2>
-        <label>이메일</label>
-        <input id="signupEmail" type="email" placeholder="user@example.com">
-        <label>비밀번호 (8~64자)</label>
-        <input id="signupPassword" type="password" placeholder="password123">
-        <label>닉네임 (20자 이하)</label>
-        <input id="signupNickname" placeholder="마로">
-        <button onclick="signup()">가입하기</button>
-      </div>
-
-      <!-- ===== 로그인 ===== -->
-      <div class="card">
-        <h2>로그인 (POST /auth/login)</h2>
-        <label>이메일</label>
-        <input id="loginEmail" type="email" placeholder="user@example.com">
-        <label>비밀번호</label>
-        <input id="loginPassword" type="password" placeholder="password123">
-        <button onclick="login()">로그인</button>
-      </div>
-
       <!-- ===== SNS 로그인 / 계정 연동 ===== -->
       <div class="card">
         <h2>SNS 로그인 / 계정 연동</h2>
@@ -114,8 +92,7 @@
         <div class="inline-note" style="margin:0 0 10px;">
           로그인/연동 모두 SNS 토큰을 얻는 과정은 같고, 보내는 엔드포인트만 다릅니다.
           '연동'은 로그인된 상태에서만 가능합니다.
-          이미 같은 이메일의 계정이 있는데 SNS로 처음 로그인하면 서버가 409
-          (SOCIAL_EMAIL_CONFLICT)로 거절합니다 — 그 경우 기존 방식으로 로그인 후 '연동'을 쓰세요.
+          이메일 로그인은 없습니다. SNS로 처음 로그인하면 새 계정이 만들어집니다 (같은 이메일이라도 SNS가 다르면 다른 계정).
         </div>
         <label>카카오 REST API 키</label>
         <input id="kakaoRestKey" placeholder="카카오 developers → 앱 키 → REST API 키">
@@ -299,30 +276,6 @@ function escapeHtml(s) {
 // ============================================================
 // 인증
 // ============================================================
-async function signup() {
-  const body = {
-    email: document.getElementById('signupEmail').value,
-    password: document.getElementById('signupPassword').value,
-    nickname: document.getElementById('signupNickname').value,
-  };
-  const res = await api('POST', '/members', body, { auth: false });
-  if (res.ok) {
-    // 가입한 계정으로 바로 로그인해볼 수 있게 로그인 폼에 복사
-    document.getElementById('loginEmail').value = body.email;
-    document.getElementById('loginPassword').value = body.password;
-    alert(`가입 완료 (id=${res.data.id}). 로그인 폼에 이메일/비밀번호를 채워뒀습니다.`);
-  }
-}
-
-async function login() {
-  const body = {
-    email: document.getElementById('loginEmail').value,
-    password: document.getElementById('loginPassword').value,
-  };
-  const res = await api('POST', '/auth/login', body, { auth: false });
-  if (res.ok) { store.save(res.data); loadProviders(); }
-}
-
 async function me() {
   await api('GET', '/members/me');
 }

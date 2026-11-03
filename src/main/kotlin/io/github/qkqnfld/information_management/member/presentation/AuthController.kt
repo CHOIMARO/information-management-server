@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.RestController
 
 /**
  * 인증 HTTP 엔드포인트. 회원 리소스(/members)와 구분되는 행위성 경로라 분리한다.
- * 세 엔드포인트 모두 access 토큰 없이 호출 가능하다 (SecurityConfig에서 permitAll) —
- * access가 만료된 상태에서도 재발급과 로그아웃은 가능해야 하기 때문이다.
+ * 모든 엔드포인트는 access 토큰 없이 호출 가능하다 (SecurityConfig에서 permitAll) —
+ * 로그인 전이거나 access가 만료된 상태에서도 재발급과 로그아웃은 가능해야 하기 때문이다.
+ * 로그인 수단은 SNS(카카오·구글·Apple)뿐이고, 첫 로그인이 곧 가입이다.
  */
 @RestController
 @RequestMapping("/auth")
@@ -20,31 +21,24 @@ class AuthController(
     private val authService: AuthService,
 ) {
 
-    /** 자체(이메일/비밀번호) 로그인. 성공 시 access + refresh 토큰을 발급한다. */
-    @PostMapping("/login")
-    fun login(@Valid @RequestBody request: LoginRequest): TokenResponse {
-        val tokens = authService.login(request.email, request.password)
-        return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
-    }
-
-    /** 카카오 로그인. 처음이면 자동 가입되며, 응답 토큰 체계는 자체 로그인과 동일하다. */
+    /** 카카오 로그인. 처음이면 자동 가입된다. */
     @PostMapping("/login/kakao")
     fun kakaoLogin(@Valid @RequestBody request: SnsLoginRequest): TokenResponse {
         val tokens = authService.kakaoLogin(request.token)
         return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
-    /** 구글 로그인. 처음이면 자동 가입되며, 응답 토큰 체계는 자체 로그인과 동일하다. */
+    /** 구글 로그인. 처음이면 자동 가입된다. */
     @PostMapping("/login/google")
     fun googleLogin(@Valid @RequestBody request: SnsLoginRequest): TokenResponse {
         val tokens = authService.googleLogin(request.token)
         return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
-    /** Apple 로그인. 처음이면 자동 가입되며, 응답 토큰 체계는 자체 로그인과 동일하다. */
+    /** Apple 로그인. 처음이면 자동 가입된다. */
     @PostMapping("/login/apple")
     fun appleLogin(@Valid @RequestBody request: AppleLoginRequest): TokenResponse {
-        val tokens = authService.appleLogin(request.token, request.nonce, request.nickname)
+        val tokens = authService.appleLogin(request.token, request.nonce, request.nickname, request.authorizationCode)
         return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 

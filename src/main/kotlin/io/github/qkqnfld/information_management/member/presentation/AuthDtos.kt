@@ -4,19 +4,6 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 /**
- * 로그인 요청(HTTP 계약).
- * 형식 검증은 최소한만 한다 — 형식이 틀렸다는 것 자체가 로그인 실패이므로
- * 어차피 자격 증명 검증에서 걸러진다.
- */
-data class LoginRequest(
-    @field:NotBlank(message = "이메일은 비어 있을 수 없습니다")
-    val email: String,
-
-    @field:NotBlank(message = "비밀번호는 비어 있을 수 없습니다")
-    val password: String,
-)
-
-/**
  * 로그인/재발급 성공 응답.
  * 클라이언트는 둘 다 저장하고, 평소 요청에는 accessToken만 쓴다.
  */
@@ -59,15 +46,26 @@ data class AppleLoginRequest(
      */
     val nonce: String? = null,
 
-    /** 첫 로그인 때 받은 이름. 처음 가입할 때만 쓰고, 이미 가입된 계정이면 쓰지 않는다. */
-    @field:Size(max = 20, message = "닉네임은 20자 이하여야 합니다")
+    /**
+     * 첫 로그인 때 받은 이름. 처음 가입할 때만 쓰고, 이미 가입된 계정이면 쓰지 않는다.
+     * 20자를 넘으면 서버가 20자로 자른다.
+     */
+    @field:Size(max = 100, message = "닉네임은 100자 이하여야 합니다")
     val nickname: String? = null,
+
+    /**
+     * Apple이 준 authorizationCode. 서버가 Apple refresh 토큰으로 바꿔 저장하고, 탈퇴할 때 Apple 토큰을 취소하는 데 쓴다.
+     * 5분 동안 한 번만 쓸 수 있으므로 로그인할 때마다 새로 받은 값을 보낸다.
+     */
+    val authorizationCode: String? = null,
 )
 
-/** Apple 계정 연동 요청(HTTP 계약). nonce 규칙은 AppleLoginRequest와 같다. */
+/** Apple 계정 연동 요청(HTTP 계약). nonce·authorizationCode 규칙은 AppleLoginRequest와 같다. */
 data class AppleLinkRequest(
     @field:NotBlank(message = "token은 비어 있을 수 없습니다")
     val token: String,
 
     val nonce: String? = null,
+
+    val authorizationCode: String? = null,
 )

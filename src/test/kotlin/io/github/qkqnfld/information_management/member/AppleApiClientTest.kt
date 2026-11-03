@@ -3,6 +3,7 @@ package io.github.qkqnfld.information_management.member
 import io.github.qkqnfld.information_management.member.domain.AuthProvider
 import io.github.qkqnfld.information_management.member.domain.InvalidSnsTokenException
 import io.github.qkqnfld.information_management.member.infrastructure.AppleApiClient
+import io.github.qkqnfld.information_management.member.infrastructure.AppleRevokeToken
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Jwks
 import io.jsonwebtoken.security.Keys
@@ -10,9 +11,16 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.test.web.client.ExpectedCount
 import org.springframework.test.web.client.MockRestServiceServer
+import org.springframework.test.web.client.match.MockRestRequestMatchers.content
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
+import org.springframework.test.web.client.response.MockRestResponseCreators.withStatus
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
+import org.springframework.http.HttpStatus
+import org.springframework.mock.http.client.MockClientHttpRequest
+import org.springframework.web.client.RestClientException
+import java.net.URLDecoder
+import java.util.Base64
 import org.springframework.web.client.RestClient
 import java.security.KeyPair
 import java.security.MessageDigest
@@ -38,15 +46,28 @@ class AppleApiClientTest {
     private val keyA: KeyPair = Jwts.SIG.RS256.keyPair().build()
     private val keyB: KeyPair = Jwts.SIG.RS256.keyPair().build()
 
+    /** Apple 개발자 계정의 .p8 키 대신 쓰는 테스트용 EC 키 (ES256) */
+    private val appleSigningKey: KeyPair = Jwts.SIG.ES256.keyPair().build()
+
     private fun client(
         clientIds: String = APP_ID,
         keyRefreshInterval: Duration = Duration.ofMinutes(1),
+        privateKeyPem: String = pem(appleSigningKey),
     ) = AppleApiClient(
         baseUrl = BASE_URL,
         clientIds = clientIds,
+        teamId = TEAM_ID,
+        keyId = KEY_ID,
+        privateKey = privateKeyPem,
         restClientBuilder = builder,
         keyRefreshInterval = keyRefreshInterval,
     )
+
+    /** .p8 파일과 같은 PEM 형식. 환경변수처럼 줄바꿈을 \n 문자로 적는다. */
+    private fun pem(keyPair: KeyPair): String =
+        "-----BEGIN PRIVATE KEY-----\\n" +
+            Base64.getEncoder().encodeToString(keyPair.private.encoded).chunked(64).joinToString("\\n") +
+            "\\n-----END PRIVATE KEY-----"
 
     /** 가짜 Apple 서버가 이 키들을 공개키 목록으로 한 번 돌려주도록 한다. */
     private fun expectKeys(vararg keys: Pair<String, KeyPair>) {
@@ -211,6 +232,89 @@ class AppleApiClientTest {
         server.verify()
     }
 
+    @Test
+    fun `정상 토큰이면 토큰을 받은 앱 ID를 함께 돌려준다`() {
+        expectKeys("kid-a" to keyA)
+
+        val profile = client(clientIds = "com.other.app, $APP_ID").fetchProfile(token(), RAW_NONCE)
+
+        assertEquals(APP_ID, profile.clientId)
+    }
+
+    @Test
+    fun `authorizationCode를 Apple refresh 토큰으로 바꾼다`() {
+        var form: Map<String, String> = emptyMap()
+        server.expect(requestTo("$BASE_URL/auth/token"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
+            .andExpect { request -> form = parseForm((request as MockClientHttpRequest).bodyAsString) }
+            .andRespond(withSuccess("""{"access_token":"a","refresh_token":"apple-refresh","id_token":"x"}""", MediaType.APPLICATION_JSON))
+
+        val refreshToken = client().exchangeAuthorizationCode("auth-code", APP_ID)
+
+        assertEquals("apple-refresh", refreshToken)
+        assertEquals("auth-code", form["code"])
+        assertEquals("authorization_code", form["grant_type"])
+        assertEquals(APP_ID, form["client_id"])
+        assertClientSecret(form.getValue("client_secret"))
+        server.verify()
+    }
+
+    @Test
+    fun `Apple 토큰을 취소할 때 refresh 토큰과 그 토큰을 받은 앱 ID를 보낸다`() {
+        var form: Map<String, String> = emptyMap()
+        server.expect(requestTo("$BASE_URL/auth/revoke"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect { request -> form = parseForm((request as MockClientHttpRequest).bodyAsString) }
+            .andRespond(withSuccess())
+
+        client().revoke(AppleRevokeToken(clientId = APP_ID, refreshToken = "apple-refresh"))
+
+        assertEquals("apple-refresh", form["token"])
+        assertEquals("refresh_token", form["token_type_hint"])
+        assertEquals(APP_ID, form["client_id"])
+        assertClientSecret(form.getValue("client_secret"))
+        server.verify()
+    }
+
+    @Test
+    fun `Apple이 토큰 취소를 거절하면 예외를 던진다 (탈퇴 Worker가 다시 시도한다)`() {
+        server.expect(requestTo("$BASE_URL/auth/revoke")).andRespond(withStatus(HttpStatus.BAD_REQUEST))
+
+        assertFailsWith<RestClientException> { client().revoke(AppleRevokeToken(APP_ID, "apple-refresh")) }
+    }
+
+    @Test
+    fun `비밀키 설정이 없으면 토큰을 다룰 수 없다`() {
+        val client = client(privateKeyPem = "")
+
+        assertEquals(false, client.canManageTokens)
+        assertFailsWith<IllegalStateException> { client.exchangeAuthorizationCode("auth-code", APP_ID) }
+    }
+
+    @Test
+    fun `철회용 토큰은 앱 ID와 refresh 토큰으로 나눠 읽을 수 있다`() {
+        val token = AppleRevokeToken(clientId = APP_ID, refreshToken = "r.abc|def")
+
+        assertEquals(token, AppleRevokeToken.decode(token.encode()))
+        assertFailsWith<IllegalArgumentException> { AppleRevokeToken.decode("no-separator") }
+    }
+
+    /** client_secret이 Apple 규격(ES256, kid, iss=Team ID, sub=앱 ID, aud=Apple)인지 확인한다. */
+    private fun assertClientSecret(clientSecret: String) {
+        val jws = Jwts.parser().verifyWith(appleSigningKey.public).build().parseSignedClaims(clientSecret)
+        assertEquals(KEY_ID, jws.header.keyId)
+        assertEquals("ES256", jws.header.algorithm)
+        assertEquals(TEAM_ID, jws.payload.issuer)
+        assertEquals(APP_ID, jws.payload.subject)
+        assertEquals(setOf("https://appleid.apple.com"), jws.payload.audience)
+    }
+
+    private fun parseForm(body: String): Map<String, String> = body.split("&").associate {
+        val (key, value) = it.split("=", limit = 2)
+        URLDecoder.decode(key, Charsets.UTF_8) to URLDecoder.decode(value, Charsets.UTF_8)
+    }
+
     private fun sha256Hex(value: String): String =
         MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 
@@ -219,5 +323,7 @@ class AppleApiClientTest {
         private const val APP_ID = "io.github.qkqnfld.magiceditor"
         private const val APPLE_USER_ID = "001234.abcdef0123456789abcdef0123456789.0123"
         private const val RAW_NONCE = "raw-nonce-123"
+        private const val TEAM_ID = "TEAM123456"
+        private const val KEY_ID = "KEY1234567"
     }
 }

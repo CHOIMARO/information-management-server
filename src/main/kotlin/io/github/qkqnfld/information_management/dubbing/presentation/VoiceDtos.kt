@@ -42,14 +42,19 @@ data class VoicesResponse(
     val custom: List<CustomVoiceResponse>,
 )
 
-/** AI 목소리. id는 더빙 요청의 presetVoice 값으로 그대로 쓴다. */
+/**
+ * AI 목소리. id는 더빙 요청의 presetVoice 값으로 그대로 쓴다.
+ * 앱은 id로 앱에 넣어 둔 샘플 파일을 찾는다 (PRD 9.17: 샘플 듣기는 서버를 부르지 않는다).
+ */
 data class PresetVoiceResponse(
     val id: String,
     val name: String,
+    /** 목록에 보여 줄 한 줄 설명 */
+    val description: String,
 ) {
     companion object {
         fun from(voice: PresetVoice): PresetVoiceResponse {
-            return PresetVoiceResponse(id = voice.name, name = voice.displayName)
+            return PresetVoiceResponse(id = voice.name, name = voice.displayName, description = voice.description)
         }
     }
 }

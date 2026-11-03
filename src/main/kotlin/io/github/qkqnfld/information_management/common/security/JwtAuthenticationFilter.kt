@@ -11,13 +11,14 @@ import org.springframework.web.filter.OncePerRequestFilter
 
 /**
  * 모든 요청에서 Authorization: Bearer 토큰을 검사하는 서블릿 필터.
- * 유효한 토큰이면 SecurityContext에 "이 요청은 회원 {id}가 인증됨"을 기록한다.
+ * 유효한 토큰이고 그 회원이 아직 있으면(탈퇴하지 않았으면) SecurityContext에 "이 요청은 회원 {id}가 인증됨"을 기록한다.
  * 여기서 기록하지 않으면 뒤의 인가 단계(authorizeHttpRequests)가 익명 요청으로 취급해 401을 낸다.
  * OncePerRequestFilter: 한 요청에 정확히 한 번만 실행되도록 보장하는 베이스 클래스.
  */
 @Component
 class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
+    private val activeMemberChecker: ActiveMemberChecker,
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -28,7 +29,8 @@ class JwtAuthenticationFilter(
         val header = request.getHeader(HttpHeaders.AUTHORIZATION)
         if (header != null && header.startsWith("Bearer ")) {
             val memberId = jwtTokenProvider.parseMemberId(header.removePrefix("Bearer "))
-            if (memberId != null) {
+            // 탈퇴한 회원의 토큰은 남은 수명이 있어도 받아들이지 않는다 (ActiveMemberChecker 참고)
+            if (memberId != null && activeMemberChecker.isActive(memberId)) {
                 // principal에 회원 id를 담는다. 컨트롤러에서 @AuthenticationPrincipal로 꺼낸다.
                 val authentication = UsernamePasswordAuthenticationToken(memberId, null, emptyList())
                 SecurityContextHolder.getContext().authentication = authentication

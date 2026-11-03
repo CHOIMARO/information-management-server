@@ -1,9 +1,12 @@
 package io.github.qkqnfld.information_management.dubbing
 
+import io.github.qkqnfld.information_management.dubbing.domain.PresetVoice
 import io.github.qkqnfld.information_management.dubbing.infrastructure.AudioStorage
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsClient
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsErrorType
 import io.github.qkqnfld.information_management.dubbing.infrastructure.TtsException
+import io.github.qkqnfld.information_management.support.TestMembers
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -25,6 +28,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import kotlin.test.Test
@@ -41,6 +45,9 @@ class VoiceApiTest {
     @Autowired
     private lateinit var mockMvc: MockMvc
 
+    @Autowired
+    private lateinit var testMembers: TestMembers
+
     @MockitoBean
     private lateinit var ttsClient: TtsClient
 
@@ -51,16 +58,48 @@ class VoiceApiTest {
 
     @BeforeEach
     fun setUp() {
-        token = registerAndLogin()
+        token = testMembers.newMemberToken()
         whenever(ttsClient.cloneVoice(any(), any(), any(), anyOrNull())).thenReturn("uc_test_voice")
+    }
+
+    @Test
+    fun `더빙 선택지(목소리, 속도, 글자 수 한도)는 로그인 없이 받을 수 있다`() {
+        mockMvc.perform(get("/dubbing-options"))
+            .andExpect(status().isOk)
+            .andExpect(header().string("Cache-Control", containsString("max-age=3600")))
+            .andExpect(jsonPath("$.voices.length()").value(PresetVoice.entries.size))
+            .andExpect(jsonPath("$.voices[0].id").value("SEOHYEON"))
+            .andExpect(jsonPath("$.voices[0].name").value("서현"))
+            .andExpect(jsonPath("$.voices[0].description").isString)
+            .andExpect(jsonPath("$.speed.min").value(0.5))
+            .andExpect(jsonPath("$.speed.max").value(2.0))
+            .andExpect(jsonPath("$.speed.default").value(1.0))
+            .andExpect(jsonPath("$.speed.presets.length()").value(3))
+            .andExpect(jsonPath("$.speed.presets[1].name").value("보통"))
+            .andExpect(jsonPath("$.speed.presets[1].value").value(1.0))
+            .andExpect(jsonPath("$.maxTextLength").value(200))
+    }
+
+    @Test
+    fun `더빙 선택지는 만료되거나 위조된 토큰을 보내도 열린다`() {
+        // 앱이 오래된 토큰을 그대로 붙여 보내도 로그인 전 화면이 깨지지 않아야 한다
+        mockMvc.perform(get("/dubbing-options").header("Authorization", "Bearer fake.invalid.token"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `내 목소리가 담긴 목소리 목록은 로그인이 필요하다`() {
+        mockMvc.perform(get("/voices"))
+            .andExpect(status().isUnauthorized)
     }
 
     @Test
     fun `목록에는 AI 목소리가 있고 내 목소리는 처음에 비어 있다`() {
         mockMvc.perform(get("/voices").authed())
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.presets[0].id").value("DYLAN"))
-            .andExpect(jsonPath("$.presets[0].name").value("딜런"))
+            .andExpect(jsonPath("$.presets[0].id").value("SEOHYEON"))
+            .andExpect(jsonPath("$.presets[0].name").value("서현"))
+            .andExpect(jsonPath("$.presets[0].description").isString)
             .andExpect(jsonPath("$.custom.length()").value(0))
     }
 
@@ -157,7 +196,7 @@ class VoiceApiTest {
 
     @Test
     fun `남의 목소리는 삭제할 수 없고 404를 응답한다`() {
-        val othersVoiceId = registerVoiceId(withToken = registerAndLogin())
+        val othersVoiceId = registerVoiceId(withToken = testMembers.newMemberToken())
 
         mockMvc.perform(delete("/voices/$othersVoiceId").authed())
             .andExpect(status().isNotFound)
@@ -191,21 +230,6 @@ class VoiceApiTest {
         return Regex("\"id\":(\\d+)").find(body)!!.groupValues[1].toLong()
     }
 
-    private fun registerAndLogin(): String {
-        val email = "voice-tester-${System.nanoTime()}@test.com"
-        mockMvc.perform(
-            post("/members")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123","nickname":"목소리테스터"}"""),
-        ).andExpect(status().isCreated)
-
-        val body = mockMvc.perform(
-            post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"email":"$email","password":"password123"}"""),
-        ).andExpect(status().isOk).andReturn().response.contentAsString
-        return Regex("\"accessToken\":\"([^\"]+)\"").find(body)!!.groupValues[1]
-    }
 
     /**
      * 요청에 인증 토큰을 싣는다. Spring 7에서는 일반 요청 빌더와 multipart 요청 빌더의

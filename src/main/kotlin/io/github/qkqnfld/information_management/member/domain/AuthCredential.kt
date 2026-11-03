@@ -13,8 +13,7 @@ import java.time.LocalDateTime
 
 /**
  * 회원의 로그인 수단("문"). 한 회원이 여러 개를 가질 수 있다 (계정 연동).
- * - LOCAL: password(BCrypt 해시)가 있고 providerId는 null
- * - KAKAO/GOOGLE: providerId(SNS 쪽 사용자 고유 id)가 있고 password는 null
+ * 모든 수단은 SNS 쪽 사용자 고유 id(providerId)를 가진다.
  * 제약: SNS 계정 하나는 전체에서 한 회원에게만 연결되고(provider, provider_id 유니크),
  * 한 회원은 provider별로 수단 하나만 가진다(member_id, provider 유니크).
  */
@@ -34,12 +33,9 @@ class AuthCredential(
     @Column(nullable = false, length = 20)
     val provider: AuthProvider,
 
-    @Column(name = "provider_id", length = 100)
-    val providerId: String? = null,
-
-    /** BCrypt 해시 (LOCAL 전용) */
-    @Column(length = 100)
-    val password: String? = null,
+    /** SNS 쪽 사용자 고유 id (카카오 회원번호, 구글 sub, Apple sub) */
+    @Column(name = "provider_id", nullable = false, length = 100)
+    val providerId: String,
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,4 +43,18 @@ class AuthCredential(
 
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),
-)
+) {
+
+    /**
+     * 탈퇴할 때 SNS 연결을 철회하는 데 쓰는 토큰 (암호화한 값).
+     * 지금은 Apple만 저장한다. Apple 토큰 취소에는 로그인 때 받은 refresh 토큰이 필요하기 때문이다.
+     */
+    @Column(length = 1000)
+    var revokeToken: String? = null
+        protected set
+
+    /** 철회용 토큰을 새 값으로 바꾼다. Apple은 로그인할 때마다 새 토큰을 받으므로 최신 값으로 덮어쓴다. */
+    fun replaceRevokeToken(encryptedToken: String) {
+        revokeToken = encryptedToken
+    }
+}

@@ -42,7 +42,7 @@ class TypecastTtsClientTest {
     )
 
     @Test
-    fun `합성 요청은 API 키 헤더와 Typecast 규격의 JSON 본문을 보내고 오디오 데이터를 돌려준다`() {
+    fun `합성 요청은 API 키 헤더와 Typecast 규격의 JSON 본문(속도 포함)을 보내고 오디오 데이터를 돌려준다`() {
         server.expect(requestTo("$BASE_URL/v1/text-to-speech"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(header("X-API-KEY", "test-key"))
@@ -51,9 +51,9 @@ class TypecastTtsClientTest {
                     """
                     {
                       "text": "안녕하세요",
-                      "voice_id": "tc_672c5f5ce59fac2a48faeaee",
+                      "voice_id": "tc_69f2e455ea79fd197aa0476f",
                       "model": "ssfm-v31",
-                      "output": { "audio_format": "mp3" }
+                      "output": { "audio_format": "mp3", "audio_tempo": 1.2 }
                     }
                     """,
                     JsonCompareMode.STRICT,
@@ -61,7 +61,7 @@ class TypecastTtsClientTest {
             )
             .andRespond(withSuccess(byteArrayOf(1, 2, 3), MediaType.parseMediaType("audio/mpeg")))
 
-        val audio = client.synthesize("안녕하세요", TtsVoice.Preset(PresetVoice.DYLAN))
+        val audio = client.synthesize("안녕하세요", TtsVoice.Preset(PresetVoice.SEOHYEON), 1.2)
 
         assertContentEquals(byteArrayOf(1, 2, 3), audio)
         server.verify()
@@ -73,7 +73,7 @@ class TypecastTtsClientTest {
             .andExpect(content().string(containsString("\"voice_id\":\"uc_mine\"")))
             .andRespond(withSuccess(byteArrayOf(9), MediaType.parseMediaType("audio/mpeg")))
 
-        client.synthesize("테스트", TtsVoice.Custom("uc_mine"))
+        client.synthesize("테스트", TtsVoice.Custom("uc_mine"), 1.0)
 
         server.verify()
     }
@@ -83,7 +83,7 @@ class TypecastTtsClientTest {
         server.expect(requestTo("$BASE_URL/v1/text-to-speech"))
             .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS))
 
-        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.DYLAN)) }
+        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.SEOHYEON), 1.0) }
 
         assertEquals(TtsErrorType.TEMPORARY, e.type)
     }
@@ -93,7 +93,7 @@ class TypecastTtsClientTest {
         server.expect(requestTo("$BASE_URL/v1/text-to-speech"))
             .andRespond { throw IOException("connection reset") }
 
-        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.DYLAN)) }
+        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.SEOHYEON), 1.0) }
 
         assertEquals(TtsErrorType.TEMPORARY, e.type)
     }
@@ -103,7 +103,7 @@ class TypecastTtsClientTest {
         server.expect(requestTo("$BASE_URL/v1/text-to-speech"))
             .andRespond(withStatus(HttpStatus.UNAUTHORIZED))
 
-        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.DYLAN)) }
+        val e = assertFailsWith<TtsException> { client.synthesize("테스트", TtsVoice.Preset(PresetVoice.SEOHYEON), 1.0) }
 
         assertEquals(TtsErrorType.REJECTED, e.type)
     }

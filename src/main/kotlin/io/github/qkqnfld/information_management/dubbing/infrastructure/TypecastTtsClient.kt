@@ -39,12 +39,12 @@ class TypecastTtsClient(
         .defaultHeader(API_KEY_HEADER, apiKey)
         .build()
 
-    override fun synthesize(text: String, voice: TtsVoice): ByteArray {
+    override fun synthesize(text: String, voice: TtsVoice, speed: Double): ByteArray {
         val request = TypecastTtsRequest(
             text = text,
             voiceId = providerVoiceIdOf(voice),
             model = model,
-            output = TypecastTtsRequest.Output(audioFormat = "mp3"),
+            output = TypecastTtsRequest.Output(audioFormat = "mp3", audioTempo = speed),
         )
         return call("text-to-speech") {
             restClient.post()
@@ -96,12 +96,16 @@ class TypecastTtsClient(
     /**
      * AI 목소리 식별자를 Typecast 목소리 id로 바꾼다.
      * when이 enum 전체를 다루므로, PresetVoice에 값을 추가하고 여기를 빠뜨리면 컴파일 오류가 난다.
-     * id는 목소리 목록 API(GET /v3/voices)에서 확인한 값을 쓴다. 공식 문서의 예시 id는 실제 id가 아니다.
+     * id는 목소리 목록 API(GET /v3/voices?model=ssfm-v31)에서 확인한 값을 쓴다 (2026-11-02 확인).
+     * 공식 문서의 예시 id는 실제 id가 아니다.
      */
     private fun providerVoiceIdOf(voice: TtsVoice): String = when (voice) {
         is TtsVoice.Custom -> voice.providerVoiceId
         is TtsVoice.Preset -> when (voice.voice) {
-            PresetVoice.DYLAN -> "tc_672c5f5ce59fac2a48faeaee"
+            PresetVoice.SEOHYEON -> "tc_69f2e455ea79fd197aa0476f"
+            PresetVoice.SEOYEON -> "tc_637cbfeef7f00f21e8a1c6c8"
+            PresetVoice.JINWOO -> "tc_632293f759d649937b97f323"
+            PresetVoice.TAEWOO -> "tc_6800a387534948f191cc952b"
         }
     }
 
@@ -165,6 +169,9 @@ internal data class TypecastTtsRequest(
     data class Output(
         @JsonProperty("audio_format")
         val audioFormat: String,
+        /** 읽기 속도 배율 (0.5~2.0, 기본 1.0) */
+        @JsonProperty("audio_tempo")
+        val audioTempo: Double,
     )
 }
 

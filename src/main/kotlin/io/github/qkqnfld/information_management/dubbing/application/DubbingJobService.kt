@@ -42,13 +42,13 @@ class DubbingJobService(
      * 내 목소리를 지정했다면 그 목소리의 주인인지 먼저 확인한다.
      */
     @Transactional
-    fun create(memberId: Long, text: String, presetVoice: PresetVoice?, customVoiceId: Long?): DubbingJobResult {
+    fun create(memberId: Long, text: String, presetVoice: PresetVoice?, customVoiceId: Long?, speed: Double): DubbingJobResult {
         if (customVoiceId != null) {
             customVoiceRepository.findByIdAndMemberId(customVoiceId, memberId)
                 ?: throw CustomVoiceNotFoundException(customVoiceId)
         }
         val job = dubbingJobRepository.save(
-            DubbingJob(memberId = memberId, text = text, presetVoice = presetVoice, customVoiceId = customVoiceId),
+            DubbingJob(memberId = memberId, text = text, presetVoice = presetVoice, customVoiceId = customVoiceId, speed = speed),
         )
         return DubbingJobResult(job = job, audioUrl = null)
     }
@@ -73,6 +73,21 @@ class DubbingJobService(
         job.audioKey?.let { audioStorage.delete(it) }
     }
 
+    /**
+     * 탈퇴한 회원의 작업과 결과 파일을 모두 지운다 (DubbingDataCleaner가 부른다).
+     * S3 삭제가 하나라도 실패하면 트랜잭션이 롤백되고, 탈퇴 Worker가 나중에 처음부터 다시 부른다.
+     * S3 삭제는 멱등이라 이미 지운 파일을 다시 지워도 괜찮다.
+     *
+     * 처리 중(PROCESSING)인 작업도 지운다. Worker가 그 뒤에 결과를 올려도
+     * complete()가 작업을 찾지 못하므로 Worker가 방금 올린 파일을 지운다.
+     */
+    @Transactional
+    fun deleteAllOfMember(memberId: Long) {
+        val jobs = dubbingJobRepository.findAllByMemberId(memberId)
+        jobs.mapNotNull { it.audioKey }.forEach { audioStorage.delete(it) }
+        dubbingJobRepository.deleteAll(jobs)
+    }
+
     // ==================== Worker 전용 ====================
 
     /**
@@ -94,7 +109,7 @@ class DubbingJobService(
             return null
         }
         job.start(now)
-        return DubbingTask(jobId = job.id, memberId = job.memberId, text = job.text, voice = voice)
+        return DubbingTask(jobId = job.id, memberId = job.memberId, text = job.text, voice = voice, speed = job.speed)
     }
 
     /**
@@ -161,4 +176,5 @@ data class DubbingTask(
     val memberId: Long,
     val text: String,
     val voice: TtsVoice,
+    val speed: Double,
 )

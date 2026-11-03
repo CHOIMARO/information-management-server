@@ -18,7 +18,7 @@
 | 날짜·시간 | `"2026-11-02T15:40:43.105877"` 형식. 시간대 표시가 없고 **한국 시간(Asia/Seoul)** 이다. 소수점 자릿수는 일정하지 않다. kotlinx-datetime의 `LocalDateTime`으로 파싱한다. |
 | 값이 없는 필드 | 생략하지 않고 `null`로 온다 |
 
-공개 API(토큰 없이 호출)는 `POST /members`와 `/auth/**`뿐이다. 나머지는 모두 토큰이 필요하다.
+공개 API(토큰 없이 호출)는 `/auth/**`와 `GET /dubbing-options`뿐이다. 나머지는 모두 토큰이 필요하다.
 
 ## 1. 오류 응답
 
@@ -29,7 +29,7 @@
   "code": "INVALID_REQUEST",
   "message": "요청 값이 올바르지 않습니다",
   "fieldErrors": [
-    { "field": "password", "reason": "비밀번호는 8자 이상 64자 이하여야 합니다" }
+    { "field": "nickname", "reason": "닉네임은 20자 이하여야 합니다" }
   ]
 }
 ```
@@ -54,37 +54,71 @@
 
 ## 2. 인증
 
-### 2-1. 회원 가입 `POST /members` (공개)
+로그인 수단은 카카오·구글·Apple뿐이다. 이메일 가입·로그인은 없다. **첫 SNS 로그인이 곧 가입**이다.
+앱은 로그인 없이 편집·저장을 쓰게 하고, 서버 API를 부르는 버튼(예: 더빙 [미리 듣기]·[더빙 넣기])을 누를 때 로그인을 확인한다 (PRD 9.17).
+
+### 2-1. SNS 로그인 (공개)
+
+| API | `token`에 넣는 값 | 플랫폼 |
+|---|---|---|
+| `POST /auth/login/kakao` | 카카오 SDK가 준 **access 토큰** | Android, iOS |
+| `POST /auth/login/google` | 구글 로그인이 준 **idToken** | Android, iOS |
+| `POST /auth/login/apple` | Apple 로그인이 준 **identityToken** (2-2) | iOS |
 
 ```json
-// 요청
-{ "email": "user@example.com", "password": "password123", "nickname": "마로" }
-
-// 응답 201
-{ "id": 1, "email": "user@example.com", "nickname": "마로", "providers": ["LOCAL"], "createdAt": "2026-11-02T15:40:43.105877" }
-```
-
-| 필드 | 규칙 |
-|---|---|
-| `email` | 이메일 형식, 100자 이하 |
-| `password` | 8~64자 |
-| `nickname` | 비어 있지 않음, 20자 이하 |
-
-오류: 400 `INVALID_REQUEST`, 409 `DUPLICATE_EMAIL`
-
-가입은 토큰을 주지 않는다. 가입 후 바로 로그인 API를 호출한다.
-
-### 2-2. 로그인 `POST /auth/login` (공개)
-
-```json
-// 요청
-{ "email": "user@example.com", "password": "password123" }
+// 요청 (카카오·구글)
+{ "token": "..." }
 
 // 응답 200
 { "accessToken": "eyJhbGciOi...", "refreshToken": "0b6f1c3e-..." }
 ```
 
-오류: 401 `INVALID_CREDENTIALS` (이메일이나 비밀번호가 틀림)
+- 처음 로그인하면 계정을 만든다. 이름·이메일·프로필 사진은 SNS가 준 값을 쓴다.
+- 이름이 없으면 "magic 사용자"로, 20자를 넘으면 20자로 잘라서 저장한다.
+- 계정은 로그인 수단과 SNS 사용자 id로 구분한다. **같은 이메일이라도 SNS가 다르면 다른 계정이다.** 서버는 이메일로 계정을 합치지 않는다.
+- 오류: 401 `INVALID_SNS_TOKEN` (위조·만료된 토큰, 또는 우리 앱에서 받은 토큰이 아님)
+
+**구글 로그인 설정 (중요)**
+
+- 서버는 idToken의 `aud`(토큰을 받기로 한 앱)가 **Web 클라이언트 ID**인지 확인한다.
+- Android: Credential Manager의 `GetGoogleIdOption.Builder().setServerClientId(<Web 클라이언트 ID>)`로 요청한다.
+- iOS: GoogleSignIn의 `GIDServerClientID`(Info.plist)에 **같은 Web 클라이언트 ID**를 넣는다.
+- Android·iOS 클라이언트 ID는 Google Cloud 콘솔에 등록만 한다 (Android는 패키지 이름과 SHA-1, iOS는 번들 ID). 서버에는 넣지 않는다.
+- Web 클라이언트 ID를 넘기지 않으면 `aud`가 달라져 401이다.
+
+**카카오 로그인 설정**
+
+- 서버는 토큰이 우리 카카오 앱에서 발급됐는지 확인한다. 다른 카카오 앱으로 받은 토큰은 401이다.
+- 네이티브 앱 키는 앱에만 넣는다. 서버는 앱 ID(숫자)와 어드민 키를 쓴다.
+
+### 2-2. Apple 로그인 (iOS)
+
+```json
+// 요청 POST /auth/login/apple
+{
+  "token": "<identityToken>",
+  "nonce": "<앱이 만든 원본 nonce, 선택>",
+  "nickname": "<첫 로그인 때 받은 이름, 선택>",
+  "authorizationCode": "<authorizationCode>"
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `token` | `ASAuthorizationAppleIDCredential.identityToken`을 UTF-8 문자열로 바꾼 값 |
+| `nonce` | 앱이 만든 **원본** 임의 문자열. Apple 요청(`ASAuthorizationAppleIDRequest.nonce`)에는 이 값의 **SHA-256 16진수 소문자**를 넣는다. 서버는 원본을 해싱해서 토큰의 `nonce`와 비교한다. 지금은 선택이지만 출시 전에 필수로 바뀐다. |
+| `nickname` | Apple은 이름을 **첫 로그인 때만** 앱에 준다. 그때 받은 이름을 보낸다. 처음 가입할 때만 쓰이고, 이미 가입된 계정이면 무시된다. 100자 이하. 20자를 넘으면 서버가 자르고, 없으면 "magic 사용자"로 가입된다. |
+| `authorizationCode` | `ASAuthorizationAppleIDCredential.authorizationCode`를 UTF-8 문자열로 바꾼 값. **로그인할 때마다 보낸다.** 서버는 이 값을 Apple 토큰으로 바꿔 저장하고, 탈퇴할 때 Apple 연결을 취소하는 데 쓴다 (App Store 계정 삭제 정책). 5분 동안 한 번만 쓸 수 있으므로 받은 즉시 보낸다. 교환에 실패해도 로그인은 성공한다. |
+
+- 응답은 2-1과 같은 `TokenResponse`다.
+- 오류: 401 `INVALID_SNS_TOKEN` (서명·발급자·앱 ID·만료·nonce 중 하나라도 맞지 않음), 400 `INVALID_REQUEST`
+- 사용자가 이메일 숨기기를 고르면 `email`은 `...@privaterelay.appleid.com` 같은 Apple 대리 주소다.
+- 서버의 환경변수 `APPLE_CLIENT_IDS`에 iOS 앱의 번들 ID가 들어 있어야 한다. 없으면 모든 Apple 로그인이 401이다.
+- **로그인 버튼은 플랫폼마다 다르다** (PRD D69). 같은 크기로 세로로 놓고, 카카오 → 구글 → Apple 순서로 둔다.
+  - iOS: 카카오, 구글, **Apple**. App Store는 제3자 로그인을 제공하는 앱에 Apple 로그인 같은 개인정보 보호형 로그인을 함께 요구한다.
+  - Android: 카카오, 구글. Apple 로그인 버튼은 두지 않는다.
+  - iOS에서 Apple로만 가입한 사용자는 Android에서 같은 계정으로 로그인할 수 없다. 계정 합치기는 2차 범위다 (PRD 9.17).
+- Apple 로그인 SDK 호출과 nonce 해싱(SHA-256, 예: CryptoKit)은 iOS 플랫폼 코드에서 한다. 공통 코드에는 결과(identityToken, authorizationCode, 원본 nonce, 이름)만 넘긴다.
 
 ### 2-3. 토큰 재발급 `POST /auth/refresh` (공개)
 
@@ -96,7 +130,7 @@
 { "accessToken": "eyJhbGciOi...(새 값)", "refreshToken": "0b6f1c3e-..." }
 ```
 
-오류: 401 `INVALID_REFRESH_TOKEN` (만료, 로그아웃됨, 위조) → 로그인 화면으로 보낸다.
+오류: 401 `INVALID_REFRESH_TOKEN` (만료, 로그아웃됨, 탈퇴함, 위조) → 저장한 토큰을 지우고 비로그인 상태로 바꾼다.
 
 ### 2-4. 로그아웃 `POST /auth/logout` (공개)
 
@@ -106,19 +140,45 @@
 // 응답 204 (본문 없음)
 ```
 
-서버는 refresh 토큰을 지운다. 이미 발급된 access 토큰은 남은 수명 동안 유효하므로, **앱도 저장한 두 토큰을 모두 지운다.**
+서버는 refresh 토큰을 지운다. 이미 발급된 access 토큰은 남은 수명 동안 유효하므로, **앱도 저장한 두 토큰을 모두 지운다.** 기기의 작업과 이미 넣은 더빙 오디오는 남긴다 (PRD 9.17).
 
 ### 2-5. 내 정보 `GET /members/me`
 
 ```json
 // 응답 200
-{ "id": 1, "email": "user@example.com", "nickname": "마로", "providers": ["LOCAL"], "createdAt": "2026-11-02T15:40:43.105877" }
+{
+  "id": 1, "email": "user@kakao.com", "nickname": "마로",
+  "profileImageUrl": "https://k.kakaocdn.net/...", "providers": ["KAKAO"],
+  "createdAt": "2026-11-02T15:40:43.105877"
+}
 ```
 
-- `providers`: 이 회원에 연결된 로그인 수단. `LOCAL`(이메일), `KAKAO`, `GOOGLE`
-- `email`: SNS로만 가입한 회원은 `null`일 수 있다.
+- `providers`: 이 회원에 연결된 로그인 수단. `KAKAO`, `GOOGLE`, `APPLE`. 계정 관리 화면의 "카카오로 로그인됨"에 쓴다.
+- `email`: 사용자가 동의하지 않았으면 `null`이다. 카카오는 비즈 앱이 아니면 이메일을 주지 않는다.
+- `profileImageUrl`: SNS가 준 프로필 사진 주소. 없으면(`null`) 기본 아바타를 보여 준다. Apple은 사진을 주지 않는다.
 
-### 2-6. 토큰 처리 규칙 (앱 구현 필수)
+### 2-6. 프로필 수정 `PATCH /members/me`
+
+```json
+// 요청
+{ "nickname": "새 이름" }
+// 응답 200: 2-5와 같은 형식
+```
+
+- `nickname`: 비어 있지 않음, 20자 이하. 앞뒤 공백은 서버가 지운다.
+- 오류: 400 `INVALID_REQUEST`
+
+### 2-7. 회원 탈퇴 `DELETE /members/me`
+
+- 응답 204 (본문 없음). 서버는 계정을 바로 지운다 (PRD S16).
+- 성공하면 앱은 저장한 토큰·이름·프로필 사진을 지우고 비로그인 상태로 바꾼 뒤 홈으로 간다.
+- 남은 access 토큰과 refresh 토큰은 바로 401이 된다.
+- 카카오 연결 끊기, Apple 토큰 취소, 서버에 남은 더빙 파일 삭제는 서버가 뒤에서 처리한다. 앱은 기다리지 않는다.
+- **구글은 앱이 처리한다.** 서버는 구글 토큰을 취소할 수 없다. 탈퇴에 성공하면 앱이 기기의 구글 로그인 상태를 지운다 (Android `CredentialManager.clearCredentialState`, iOS `GIDSignIn.sharedInstance.disconnect`).
+- 같은 SNS로 다시 로그인하면 새 계정이 만들어진다. 이름과 내 목소리는 복구되지 않는다.
+- 오류: 401 `UNAUTHORIZED`
+
+### 2-8. 토큰 처리 규칙 (앱 구현 필수)
 
 | 토큰 | 수명 | 비고 |
 |---|---|---|
@@ -127,58 +187,22 @@
 
 1. 보호 API가 401을 돌려주면 access 토큰이 만료된 것으로 보고 `POST /auth/refresh`를 **한 번** 호출한다.
 2. 재발급에 성공하면 새 access 토큰을 저장하고 원래 요청을 다시 보낸다.
-3. 재발급이 401이면 저장한 토큰을 지우고 로그인 화면으로 보낸다.
-4. **`/auth/**` 요청이 받은 401에는 재발급을 시도하지 않는다.** 로그인 실패(`INVALID_CREDENTIALS`)도 401이므로, 이 규칙이 없으면 로그인 실패를 토큰 만료로 오해하고 재발급을 무한히 반복한다.
+3. 재발급이 401이면 저장한 토큰을 지우고 비로그인 상태로 바꾼다. 다음에 서버 기능 버튼을 누를 때 로그인 시트를 띄운다 (PRD 9.17).
+4. **`/auth/**` 요청이 받은 401에는 재발급을 시도하지 않는다.** SNS 로그인 실패(`INVALID_SNS_TOKEN`)도 401이므로, 이 규칙이 없으면 로그인 실패를 토큰 만료로 오해하고 재발급을 무한히 반복한다.
 5. 여러 요청이 동시에 401을 받아도 재발급은 한 번만 한다. 재발급 중에는 다른 요청이 기다렸다가 새 토큰으로 다시 보낸다. (Ktor `Auth` 플러그인의 bearer 방식을 쓰면 이 처리를 플러그인이 맡는다. 4-2를 본다.)
 
-### 2-7. SNS 로그인 (나중에 구현)
+### 2-9. 계정 연동 (1차 앱에서는 쓰지 않음)
 
-| API | `token`에 넣는 값 | 주 사용처 |
-|---|---|---|
-| `POST /auth/login/kakao` | 카카오 SDK가 준 **access 토큰** | Android, iOS |
-| `POST /auth/login/google` | 구글 로그인이 준 **idToken** | Android, iOS |
-| `POST /auth/login/apple` | Apple 로그인이 준 **identityToken** | iOS |
-
-요청은 `{ "token": "..." }`, 응답은 2-2와 같은 `TokenResponse`다. Apple만 요청 필드가 더 있다 (2-8).
-
-오류: 401 `INVALID_SNS_TOKEN`, 409 `SOCIAL_EMAIL_CONFLICT` (같은 이메일로 가입된 계정이 이미 있음 → 기존 방식으로 로그인한 뒤 계정 연동을 안내한다)
-
-계정 연동 API(`/members/me/links/*`)의 형식은 `openapi.json`을 본다. 해제 경로의 `provider`는 대문자(`KAKAO`, `GOOGLE`, `APPLE`, `LOCAL`)다.
-
-### 2-8. Apple 로그인 (iOS)
-
-```json
-// 요청 POST /auth/login/apple
-{
-  "token": "<identityToken>",
-  "nonce": "<앱이 만든 원본 nonce, 선택>",
-  "nickname": "<첫 로그인 때 받은 이름, 선택, 20자 이하>"
-}
-```
-
-| 필드 | 규칙 |
-|---|---|
-| `token` | `ASAuthorizationAppleIDCredential.identityToken`을 UTF-8 문자열로 바꾼 값 |
-| `nonce` | 앱이 만든 **원본** 임의 문자열. Apple 요청(`ASAuthorizationAppleIDRequest.nonce`)에는 이 값의 **SHA-256 16진수 소문자**를 넣는다. 서버는 원본을 해싱해서 토큰의 `nonce`와 비교한다. 지금은 선택이지만 출시 전에 필수로 바뀐다. |
-| `nickname` | Apple은 이름을 **첫 로그인 때만** 앱에 준다. 그때 받은 이름을 보낸다. 처음 가입할 때만 쓰이고, 이미 가입된 계정이면 무시된다. 없으면 "사용자"로 가입된다. |
-
-- 응답은 2-2와 같은 `TokenResponse`다.
-- 오류: 401 `INVALID_SNS_TOKEN` (서명·발급자·앱 ID·만료·nonce 중 하나라도 맞지 않음), 409 `SOCIAL_EMAIL_CONFLICT`, 400 `INVALID_REQUEST`
-- 사용자가 이메일 숨기기를 고르면 `email`은 `...@privaterelay.appleid.com` 같은 Apple 대리 주소다.
-- 연동: `POST /members/me/links/apple`에 `{ "token": "...", "nonce": "..." }` (응답 204)
-- 서버의 환경변수 `APPLE_CLIENT_IDS`에 iOS 앱의 번들 ID가 들어 있어야 한다. 없으면 모든 Apple 로그인이 401이다.
-- **로그인 화면 구성은 플랫폼마다 다르다.**
-  - iOS: 이메일, 카카오, 구글, **Apple**. App Store는 제3자 로그인을 제공하는 앱에 Apple 로그인 같은 개인정보 보호형 로그인을 함께 요구한다.
-  - Android: 이메일, 카카오, 구글. Apple 로그인 버튼은 두지 않는다.
-  - iOS에서 Apple로만 가입한 사용자가 Android를 쓰려면, iOS에서 이메일·카카오·구글 수단을 먼저 연동해 두도록 안내한다.
-- Apple 로그인 SDK 호출과 nonce 해싱(SHA-256, 예: CryptoKit)은 iOS 플랫폼 코드에서 한다. 공통 코드에는 결과(identityToken, 원본 nonce, 이름)만 넘긴다.
+한 계정에 다른 SNS를 연결하는 API다 (`/members/me/links/*`). PRD는 계정 합치기를 2차로 미뤘다. 형식은 `openapi.json`을 본다.
+Apple 연동 요청(`POST /members/me/links/apple`)도 2-2처럼 `authorizationCode`를 보낸다. 해제 경로의 `provider`는 대문자(`KAKAO`, `GOOGLE`, `APPLE`)다.
 
 ## 3. 더빙
 
 ### 3-1. 전체 흐름
 
 ```
-1. GET  /voices                → 고를 수 있는 목소리 목록
+1. GET  /dubbing-options       → 목소리·속도·글자 수 한도 (로그인 없이)
+   GET  /voices                → 내 목소리 (로그인 필요, 내 목소리 기능을 열 때)
 2. POST /dubbing-jobs          → 202 접수 (status: PENDING)
 3. GET  /dubbing-jobs/{id}     → 1초 간격으로 반복 조회
                                   PENDING → PROCESSING → COMPLETED 또는 FAILED
@@ -187,42 +211,65 @@
 
 더빙은 요청 즉시 결과를 주지 않는다. 서버가 음성을 합성하는 동안 앱이 기다리지 않도록 **접수(202)와 결과 조회를 나눈** 비동기 방식이다. 보통 접수 후 1~3초 안에 끝난다.
 
-### 3-2. 목소리 목록 `GET /voices`
+### 3-2. 더빙 선택지 `GET /dubbing-options` (공개)
+
+더빙 시트는 로그인하지 않아도 열린다 (PRD D68). 그래서 시트에 그릴 값은 토큰 없이 받는다.
 
 ```json
-// 응답 200
+// 응답 200 (Cache-Control: max-age=3600, public)
 {
-  "presets": [ { "id": "DYLAN", "name": "딜런" } ],
-  "custom": []
+  "voices": [
+    { "id": "SEOHYEON", "name": "서현", "description": "아나운서·대화에 어울리는 여성 목소리" },
+    { "id": "SEOYEON", "name": "서연", "description": "설명·강의에 어울리는 여성 목소리" }
+  ],
+  "speed": {
+    "min": 0.5, "max": 2.0, "default": 1.0,
+    "presets": [ { "name": "느리게", "value": 0.8 }, { "name": "보통", "value": 1.0 }, { "name": "빠르게", "value": 1.2 } ]
+  },
+  "maxTextLength": 200
 }
 ```
 
-- `presets`: AI 목소리. 더빙 요청의 `presetVoice`에 `id`를 넣는다.
-- `custom`: 내 목소리 (`{ "id": 3, "name": "내 목소리", "createdAt": "..." }`). 더빙 요청의 `customVoiceId`에 `id`를 넣는다.
-- **목소리 id를 앱에 하드코딩하지 않는다.** 지금은 `DYLAN` 하나지만 한국어 목소리로 바뀔 예정이다. 화면은 항상 이 목록으로 그린다.
+- `voices`: AI 목소리. 순서대로 보여 준다. 더빙 요청의 `presetVoice`에 `id`를 넣는다.
+- **목소리 목록을 앱에 하드코딩하지 않는다.** 서버 배포로 목소리를 더하거나 뺄 수 있다. 화면은 항상 이 목록으로 그린다.
+- 샘플 듣기는 서버를 부르지 않는다 (PRD 9.17). 앱에 넣어 둔 샘플 파일을 `id`로 찾는다. 샘플 파일이 없는 `id`면 샘플 버튼을 숨긴다.
+- `speed.presets`: 속도 버튼(느리게·보통·빠르게). 더빙 요청의 `speed`에 `value`를 그대로 보낸다.
+- `speed.min`~`speed.max`: [구간에 맞추기]처럼 앱이 배율을 계산할 때의 범위다.
+- `maxTextLength`: 문구 입력 한도. 넘으면 입력을 막는다.
+- 응답은 1시간 동안 캐시해도 된다.
+
+### 3-2-1. 내 목소리 목록 `GET /voices` (로그인 필요)
+
+```json
+// 응답 200
+{ "presets": [ "...3-2의 voices와 같음" ], "custom": [ { "id": 3, "name": "내 목소리", "createdAt": "..." } ] }
+```
+
+- `custom`: 내 목소리. 더빙 요청의 `customVoiceId`에 `id`를 넣는다. 내 목소리는 아직 쓰지 않는다 (3-8).
 
 ### 3-3. 더빙 요청 `POST /dubbing-jobs`
 
 ```json
 // 요청: presetVoice와 customVoiceId 중 정확히 하나만 넣는다
-{ "text": "안녕하세요. 첫 번째 더빙입니다.", "presetVoice": "DYLAN" }
+{ "text": "안녕하세요. 첫 번째 더빙입니다.", "presetVoice": "SEOHYEON", "speed": 1.0 }
 
 // 응답 202 + 헤더 Location: /dubbing-jobs/12
 {
   "id": 12, "status": "PENDING", "text": "안녕하세요. 첫 번째 더빙입니다.",
-  "presetVoice": "DYLAN", "customVoiceId": null,
+  "presetVoice": "SEOHYEON", "customVoiceId": null, "speed": 1.0,
   "audioUrl": null, "createdAt": "2026-11-02T15:40:43.105877", "completedAt": null
 }
 ```
 
 | 필드 | 규칙 |
 |---|---|
-| `text` | 공백만으로 된 문장은 안 된다. 2000자 이하 |
-| `presetVoice` | `GET /voices`의 `presets[].id` |
+| `text` | 공백만으로 된 문장은 안 된다. 200자 이하 (`maxTextLength`) |
+| `presetVoice` | `GET /dubbing-options`의 `voices[].id` |
 | `customVoiceId` | `GET /voices`의 `custom[].id` |
+| `speed` | 선택. 읽기 속도 배율 0.5~2.0. 보내지 않으면 1.0(보통) |
 
 오류:
-- 400 `INVALID_REQUEST`: 텍스트 규칙 위반, 또는 목소리를 둘 다 넣거나 하나도 넣지 않음 (`fieldErrors[].field`가 `voiceSelectedOnce`)
+- 400 `INVALID_REQUEST`: 텍스트·속도 규칙 위반, 또는 목소리를 둘 다 넣거나 하나도 넣지 않음 (`fieldErrors[].field`가 `voiceSelectedOnce`)
 - 400 `MALFORMED_BODY`: `presetVoice`에 목록에 없는 값
 - 404 `CUSTOM_VOICE_NOT_FOUND`: 내 목소리가 아니거나 없는 id
 
