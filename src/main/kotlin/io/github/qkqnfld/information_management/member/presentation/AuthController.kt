@@ -42,7 +42,10 @@ class AuthController(
         return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
-    /** access 토큰 재발급. refresh 토큰이 무효/만료면 401 → 클라이언트는 재로그인. */
+    /**
+     * access 토큰 재발급. 응답의 refresh 토큰은 새 값이다 (교체). 이전 refresh 토큰은 1분 뒤 쓸 수 없다.
+     * refresh 토큰이 무효·만료·재사용이면 401 → 클라이언트는 재로그인.
+     */
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody request: RefreshTokenRequest): TokenResponse {
         val tokens = authService.refresh(request.refreshToken)

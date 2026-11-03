@@ -10,7 +10,10 @@ import jakarta.validation.constraints.Size
 data class TokenResponse(
     /** 모든 API 요청의 Authorization: Bearer 헤더에 넣는 토큰 (수명 1시간) */
     val accessToken: String,
-    /** accessToken 만료 시 재발급에만 쓰는 토큰 (수명 30일, 서버 DB 저장) */
+    /**
+     * accessToken 만료 시 재발급에만 쓰는 토큰 (수명 30일, 서버 DB에 해시로 저장).
+     * 재발급할 때마다 새 값이 온다 (refresh 토큰 교체). 앱은 받을 때마다 저장한 값을 바꾼다.
+     */
     val refreshToken: String,
 )
 

@@ -107,4 +107,4 @@
 - **완료 (2026-11-03)**: 카카오는 토큰 정보 API의 `app_id`를, 구글은 공개키로 직접 검증한 idToken의 `aud`를 확인한다. 환경변수 `KAKAO_APP_ID`, `GOOGLE_CLIENT_IDS`가 없으면 로그인을 모두 거절한다.
 - **Apple nonce 필수화**: 지금은 `nonce`를 보내면 검증하고, 보내지 않으면 건너뛴다. iOS 앱이 nonce를 보내기 시작하면 필수로 바꾼다 (`AppleApiClient.fetchProfile`).
 - **Apple 설정**: Apple Developer Program 가입, 번들 ID 등록, Sign in with Apple 기능 활성화, Sign in with Apple 키(.p8) 발급. 서버 환경변수 `APPLE_CLIENT_IDS`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `TOKEN_ENCRYPTION_KEY`를 넣는다 (`docs/ec2-setup.md` 6-1).
-- **로그인 유지 기간**: PRD 9.17은 "로그아웃·탈퇴 전까지 유지"다. 지금 refresh 토큰은 30일 뒤 끝나고 재발급해도 늘지 않는다. refresh 토큰 교체(재발급할 때 새 refresh 토큰 발급)를 검토한다.
+- **완료 (2026-11-03) 로그인 유지 기간**: refresh 토큰 교체를 적용했다 (V5). 재발급할 때마다 새 토큰과 새 30일을 주므로, 30일 안에 앱을 쓰면 다시 로그인하지 않는다. 토큰은 해시로 저장하고, 1분 유예 뒤 재사용되면 그 로그인을 끊는다.

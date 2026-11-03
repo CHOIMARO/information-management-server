@@ -50,7 +50,11 @@ class AuthService(
     private val googleApiClient: GoogleApiClient,
     private val appleApiClient: AppleApiClient,
     @Value("\${jwt.refresh-expiration-ms}") private val refreshExpirationMs: Long,
+    /** 교체된 refresh 토큰을 다시 받아 주는 시간(초). 동시 재발급과 응답 유실에 대비한다. */
+    @Value("\${jwt.refresh-reuse-grace-seconds:60}") refreshReuseGraceSeconds: Long,
 ) {
+
+    private val refreshReuseGrace: Duration = Duration.ofSeconds(refreshReuseGraceSeconds)
 
     private val log = LoggerFactory.getLogger(AuthService::class.java)
 
@@ -182,38 +186,64 @@ class AuthService(
     // ==================== 재발급 / 로그아웃 ====================
 
     /**
-     * refresh 토큰이 유효하면 새 access 토큰을 발급한다.
-     * DB에 없으면(위조·로그아웃됨·탈퇴함) 또는 만료됐으면 401 — 클라이언트는 재로그인으로 보낸다.
-     * 만료된 행은 여기서 지우지 않고(롤백 문제) 매일 새벽 배치가 정리한다.
+     * refresh 토큰 교체(rotation): 새 access 토큰과 **새 refresh 토큰**을 발급한다.
+     * 새 refresh 토큰은 발급 시점부터 다시 30일 유효하다. 그래서 30일 안에 앱을 쓰는 사용자는 다시 로그인하지 않는다.
+     *
+     * 이미 교체된 토큰이 오면:
+     * - 교체된 지 유예 시간(기본 1분) 안: 동시 재발급이나 응답 유실로 본다. 같은 묶음으로 새 토큰을 한 번 더 준다.
+     * - 유예 시간이 지남: 토큰이 새어 다른 곳에서 쓰였다고 본다(재사용 감지). 그 로그인의 토큰 묶음을 모두 지우고 401.
+     *   정상 사용자와 훔친 사람 모두 다시 로그인해야 하므로, 훔친 토큰이 계속 살아 있지 않는다.
+     *
+     * noRollbackFor: 이 메서드는 묶음을 지운 뒤 예외(401)를 던진다. 보통은 예외가 나면 트랜잭션이 롤백되어
+     * 삭제도 취소된다. 이 예외에서는 롤백하지 않고 커밋하도록 지정해 삭제를 남긴다.
      */
+    @Transactional(noRollbackFor = [InvalidRefreshTokenException::class])
     fun refresh(refreshToken: String): AuthTokens {
-        val stored = refreshTokenRepository.findByToken(refreshToken) ?: throw InvalidRefreshTokenException()
-        if (stored.isExpired()) {
+        val now = LocalDateTime.now()
+        val stored = refreshTokenRepository.findByTokenHash(RefreshToken.hash(refreshToken))
+            ?: throw InvalidRefreshTokenException()
+        if (stored.isExpired(now)) {
             throw InvalidRefreshTokenException()
         }
-        return AuthTokens(
-            accessToken = jwtTokenProvider.createToken(stored.memberId),
-            refreshToken = refreshToken,
-        )
+        if (stored.isRotated) {
+            if (!stored.isWithinReuseGrace(refreshReuseGrace, now)) {
+                refreshTokenRepository.deleteByFamilyId(stored.familyId)
+                log.warn("교체된 refresh 토큰 재사용 감지: memberId={}, 이 로그인의 토큰을 모두 무효화한다", stored.memberId)
+                throw InvalidRefreshTokenException()
+            }
+        } else {
+            stored.markRotated(now)
+        }
+        return issueTokens(stored.memberId, familyId = stored.familyId, now = now)
     }
 
     /**
-     * 로그아웃: refresh 토큰을 삭제해 재발급 경로를 끊는다.
-     * 이미 발급된 access 토큰은 남은 수명(최대 1시간)까지만 유효하다.
+     * 로그아웃: 이 토큰이 속한 로그인의 refresh 토큰을 모두 삭제한다.
+     * 유예 시간 중인 이전 토큰까지 지워야 로그아웃 뒤 재발급을 확실히 막는다. 다른 기기의 로그인은 남는다.
+     * 이미 발급된 access 토큰은 남은 수명(최대 1시간)까지만 유효하다. 없는 토큰이어도 조용히 끝난다 (멱등).
      */
     @Transactional
     fun logout(refreshToken: String) {
-        refreshTokenRepository.deleteByToken(refreshToken)
+        val stored = refreshTokenRepository.findByTokenHash(RefreshToken.hash(refreshToken)) ?: return
+        refreshTokenRepository.deleteByFamilyId(stored.familyId)
     }
 
-    /** access + refresh 발급. refresh는 예측 불가능한 난수(UUID v4)로 만들어 DB에 저장한다. */
-    private fun issueTokens(memberId: Long): AuthTokens {
+    /**
+     * access + refresh 발급. refresh는 예측 불가능한 난수(UUID v4)로 만들고, DB에는 해시만 저장한다.
+     * @param familyId 로그인이면 새 묶음, 재발급이면 이전 토큰의 묶음을 이어받는다.
+     */
+    private fun issueTokens(
+        memberId: Long,
+        familyId: String = UUID.randomUUID().toString(),
+        now: LocalDateTime = LocalDateTime.now(),
+    ): AuthTokens {
         val refreshToken = UUID.randomUUID().toString()
         refreshTokenRepository.save(
             RefreshToken(
-                token = refreshToken,
+                tokenHash = RefreshToken.hash(refreshToken),
                 memberId = memberId,
-                expiresAt = LocalDateTime.now().plus(Duration.ofMillis(refreshExpirationMs)),
+                familyId = familyId,
+                expiresAt = now.plus(Duration.ofMillis(refreshExpirationMs)),
             ),
         )
         return AuthTokens(

@@ -21,8 +21,10 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
 - 스키마는 Flyway가 관리한다 (`src/main/resources/db/migration/V*.sql`, `ddl-auto=validate`).
   스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
   (체크섬 불일치로 서버가 뜨지 않음). 기존 개발 DB는 baseline-version=4로 베이스라인 처리됨.
-- 인증: JWT access 토큰 1시간(무상태) + refresh 토큰 30일(DB 저장, RefreshToken 엔티티). 설정은 `common/security/`.
-  로그아웃 = refresh 삭제, 재발급 = POST /auth/refresh. permitAll: /auth/**, GET /dubbing-options.
+- 인증: JWT access 토큰 1시간(무상태) + refresh 토큰 30일(DB에 SHA-256 해시로 저장, RefreshToken 엔티티). 설정은 `common/security/`.
+  재발급 = POST /auth/refresh: refresh 토큰 교체(rotation). 새 refresh를 주고 만료를 다시 30일로 잡는다.
+  같은 로그인의 토큰은 familyId로 묶고, 교체된 토큰은 1분(jwt.refresh-reuse-grace-seconds)만 다시 받는다.
+  그 뒤 재사용되면 묶음 전체 삭제 + 401 (noRollbackFor로 삭제를 커밋). 로그아웃 = 묶음 삭제. permitAll: /auth/**, GET /dubbing-options.
   나머지는 `Authorization: Bearer <access>` 필수. JwtAuthenticationFilter는 토큰의 회원이 아직 있는지도
   확인한다(ActiveMemberChecker, 탈퇴 직후 남은 access 토큰 거절).
   만료 refresh는 매일 04시 @Scheduled 배치(RefreshTokenCleanupScheduler)가 정리한다.
