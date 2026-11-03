@@ -13,6 +13,10 @@
     {
       "url": "http://10.0.2.2:8080",
       "description": "로컬 서버 (Android 에뮬레이터에서 접속)"
+    },
+    {
+      "url": "http://localhost:8080",
+      "description": "로컬 서버 (iOS 시뮬레이터에서 접속)"
     }
   ],
   "paths": {
