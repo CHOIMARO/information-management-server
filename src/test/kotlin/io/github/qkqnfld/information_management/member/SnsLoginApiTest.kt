@@ -2,6 +2,7 @@ package io.github.qkqnfld.information_management.member
 
 import io.github.qkqnfld.information_management.member.domain.AuthProvider
 import io.github.qkqnfld.information_management.member.domain.InvalidSnsTokenException
+import io.github.qkqnfld.information_management.member.infrastructure.AppleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.GoogleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.KakaoApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.OAuthProfile
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * SNS 로그인 API 통합 테스트.
@@ -35,6 +37,9 @@ class SnsLoginApiTest {
 
     @MockitoBean
     private lateinit var googleApiClient: GoogleApiClient
+
+    @MockitoBean
+    private lateinit var appleApiClient: AppleApiClient
 
     private fun uniqueId(): String = "sns-${System.nanoTime()}"
 
@@ -137,6 +142,76 @@ class SnsLoginApiTest {
         )
             .andExpect(status().isUnauthorized)
             .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+    }
+
+    @Test
+    fun `Apple 첫 로그인이면 앱이 보낸 이름으로 가입된다`() {
+        val providerId = uniqueId()
+        whenever(appleApiClient.fetchProfile("apple-token-1", "nonce-1")).thenReturn(
+            OAuthProfile(AuthProvider.APPLE, providerId, "$providerId@privaterelay.appleid.com", null),
+        )
+
+        val access = appleLoginAccess("""{"token":"apple-token-1","nonce":"nonce-1","nickname":"애플유저"}""")
+
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.nickname").value("애플유저"))
+            .andExpect(jsonPath("$.email").value("$providerId@privaterelay.appleid.com"))
+            .andExpect(jsonPath("$.providers[0]").value("APPLE"))
+    }
+
+    @Test
+    fun `Apple 재로그인은 이름 없이도 같은 회원에 도착하고 처음 이름이 유지된다`() {
+        val providerId = uniqueId()
+        // Apple은 이름을 첫 로그인 때만 앱에 준다. 두 번째부터는 이름이 없다.
+        whenever(appleApiClient.fetchProfile("apple-token-2", null)).thenReturn(
+            OAuthProfile(AuthProvider.APPLE, providerId, null, null),
+        )
+
+        val first = appleLoginAccess("""{"token":"apple-token-2","nickname":"처음이름"}""")
+        val second = appleLoginAccess("""{"token":"apple-token-2"}""")
+
+        assertEquals(memberIdOf(first), memberIdOf(second), "재로그인 시 새 회원이 만들어지면 안 된다")
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $second"))
+            .andExpect(jsonPath("$.nickname").value("처음이름"))
+    }
+
+    @Test
+    fun `Apple 첫 로그인에 이름이 없으면 기본 이름으로 가입된다`() {
+        whenever(appleApiClient.fetchProfile("apple-token-3", null)).thenReturn(
+            OAuthProfile(AuthProvider.APPLE, uniqueId(), null, null),
+        )
+
+        val access = appleLoginAccess("""{"token":"apple-token-3","nickname":"  "}""")
+
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
+            .andExpect(jsonPath("$.nickname").value("사용자"))
+    }
+
+    @Test
+    fun `Apple 토큰 검증에 실패하면 401과 INVALID_SNS_TOKEN 코드를 응답한다`() {
+        whenever(appleApiClient.fetchProfile("bad-apple-token", null)).thenThrow(InvalidSnsTokenException())
+
+        appleLogin("""{"token":"bad-apple-token"}""")
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.code").value("INVALID_SNS_TOKEN"))
+    }
+
+    @Test
+    fun `Apple 로그인 이름이 20자를 넘으면 400을 응답한다`() {
+        appleLogin("""{"token":"apple-token-4","nickname":"${"가".repeat(21)}"}""")
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.fieldErrors[0].field").value("nickname"))
+    }
+
+    private fun appleLogin(json: String) = mockMvc.perform(
+        post("/auth/login/apple").contentType(MediaType.APPLICATION_JSON).content(json),
+    )
+
+    private fun appleLoginAccess(json: String): String {
+        val body = appleLogin(json).andExpect(status().isOk).andReturn().response.contentAsString
+        return Regex("\"accessToken\":\"([^\"]+)\"").find(body)!!.groupValues[1]
     }
 
     /** SNS 로그인 후 access 토큰을 꺼낸다. */

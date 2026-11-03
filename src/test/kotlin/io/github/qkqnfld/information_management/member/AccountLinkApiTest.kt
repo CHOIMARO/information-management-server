@@ -1,6 +1,7 @@
 package io.github.qkqnfld.information_management.member
 
 import io.github.qkqnfld.information_management.member.domain.AuthProvider
+import io.github.qkqnfld.information_management.member.infrastructure.AppleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.GoogleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.KakaoApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.OAuthProfile
@@ -36,6 +37,9 @@ class AccountLinkApiTest {
 
     @MockitoBean
     private lateinit var googleApiClient: GoogleApiClient
+
+    @MockitoBean
+    private lateinit var appleApiClient: AppleApiClient
 
     private fun uniqueId(): String = "link-${System.nanoTime()}"
 
@@ -92,6 +96,34 @@ class AccountLinkApiTest {
         val kakaoAccess = Regex("\"accessToken\":\"([^\"]+)\"").find(kakaoLoginBody)!!.groupValues[1]
 
         assertEquals(memberIdOf(access), memberIdOf(kakaoAccess), "연동 후 카카오 로그인은 같은 회원이어야 한다")
+    }
+
+    @Test
+    fun `Apple 계정을 연동하면 이후 Apple 로그인은 같은 계정에 도착한다`() {
+        val providerId = uniqueId()
+        val access = signupAndLogin("$providerId@gmail.com")
+        whenever(appleApiClient.fetchProfile("apple-link-token", "link-nonce")).thenReturn(
+            OAuthProfile(AuthProvider.APPLE, providerId, null, null),
+        )
+
+        mockMvc.perform(
+            post("/members/me/links/apple")
+                .header("Authorization", "Bearer $access")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"token":"apple-link-token","nonce":"link-nonce"}"""),
+        ).andExpect(status().isNoContent)
+
+        mockMvc.perform(get("/members/me").header("Authorization", "Bearer $access"))
+            .andExpect(jsonPath("$.providers[?(@ == 'APPLE')]").exists())
+
+        val appleLoginBody = mockMvc.perform(
+            post("/auth/login/apple")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"token":"apple-link-token","nonce":"link-nonce"}"""),
+        ).andExpect(status().isOk).andReturn().response.contentAsString
+        val appleAccess = Regex("\"accessToken\":\"([^\"]+)\"").find(appleLoginBody)!!.groupValues[1]
+
+        assertEquals(memberIdOf(access), memberIdOf(appleAccess), "연동 후 Apple 로그인은 같은 회원이어야 한다")
     }
 
     @Test

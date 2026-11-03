@@ -41,6 +41,13 @@ class AuthController(
         return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
+    /** Apple 로그인. 처음이면 자동 가입되며, 응답 토큰 체계는 자체 로그인과 동일하다. */
+    @PostMapping("/login/apple")
+    fun appleLogin(@Valid @RequestBody request: AppleLoginRequest): TokenResponse {
+        val tokens = authService.appleLogin(request.token, request.nonce, request.nickname)
+        return TokenResponse(accessToken = tokens.accessToken, refreshToken = tokens.refreshToken)
+    }
+
     /** access 토큰 재발급. refresh 토큰이 무효/만료면 401 → 클라이언트는 재로그인. */
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody request: RefreshTokenRequest): TokenResponse {

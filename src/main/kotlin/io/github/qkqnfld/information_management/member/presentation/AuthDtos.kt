@@ -1,6 +1,7 @@
 package io.github.qkqnfld.information_management.member.presentation
 
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 
 /**
  * 로그인 요청(HTTP 계약).
@@ -41,4 +42,32 @@ data class RefreshTokenRequest(
 data class SnsLoginRequest(
     @field:NotBlank(message = "token은 비어 있을 수 없습니다")
     val token: String,
+)
+
+/**
+ * Apple 로그인 요청(HTTP 계약).
+ * Apple 토큰에는 이름이 없다. 이름은 Apple이 첫 로그인 때 앱에만 주므로, 앱이 그때 nickname으로 함께 보낸다.
+ */
+data class AppleLoginRequest(
+    /** Apple이 준 identityToken (JWT) */
+    @field:NotBlank(message = "token은 비어 있을 수 없습니다")
+    val token: String,
+
+    /**
+     * 앱이 만든 원본 nonce. 앱은 Apple 요청에 이 값의 SHA-256(16진수 소문자)을 넣는다.
+     * 보내면 서버가 토큰의 nonce와 비교한다. 같은 토큰을 다시 쓰는 공격(재사용)을 막는다.
+     */
+    val nonce: String? = null,
+
+    /** 첫 로그인 때 받은 이름. 처음 가입할 때만 쓰고, 이미 가입된 계정이면 쓰지 않는다. */
+    @field:Size(max = 20, message = "닉네임은 20자 이하여야 합니다")
+    val nickname: String? = null,
+)
+
+/** Apple 계정 연동 요청(HTTP 계약). nonce 규칙은 AppleLoginRequest와 같다. */
+data class AppleLinkRequest(
+    @field:NotBlank(message = "token은 비어 있을 수 없습니다")
+    val token: String,
+
+    val nonce: String? = null,
 )

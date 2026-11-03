@@ -58,7 +58,14 @@ class MemberController(
         authService.linkGoogle(memberId, request.token)
     }
 
-    /** 로그인 수단 연결 해제. provider는 LOCAL/KAKAO/GOOGLE (대문자). 마지막 수단은 해제 불가(409). */
+    /** 내 계정에 Apple 로그인 수단 연결. */
+    @PostMapping("/me/links/apple")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun linkApple(@AuthenticationPrincipal memberId: Long, @Valid @RequestBody request: AppleLinkRequest) {
+        authService.linkApple(memberId, request.token, request.nonce)
+    }
+
+    /** 로그인 수단 연결 해제. provider는 LOCAL/KAKAO/GOOGLE/APPLE (대문자). 마지막 수단은 해제 불가(409). */
     @DeleteMapping("/me/links/{provider}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun unlink(@AuthenticationPrincipal memberId: Long, @PathVariable provider: AuthProvider) {

@@ -14,4 +14,7 @@ enum class AuthProvider {
 
     /** 구글 로그인 */
     GOOGLE,
+
+    /** Apple 로그인 (iOS 출시에 필요) */
+    APPLE,
 }

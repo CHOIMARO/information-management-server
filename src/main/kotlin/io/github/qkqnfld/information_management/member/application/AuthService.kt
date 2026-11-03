@@ -11,6 +11,7 @@ import io.github.qkqnfld.information_management.member.domain.Member
 import io.github.qkqnfld.information_management.member.domain.RefreshToken
 import io.github.qkqnfld.information_management.member.domain.SnsAccountAlreadyLinkedException
 import io.github.qkqnfld.information_management.member.domain.SocialEmailConflictException
+import io.github.qkqnfld.information_management.member.infrastructure.AppleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.AuthCredentialRepository
 import io.github.qkqnfld.information_management.member.infrastructure.GoogleApiClient
 import io.github.qkqnfld.information_management.member.infrastructure.KakaoApiClient
@@ -46,6 +47,7 @@ class AuthService(
     private val jwtTokenProvider: JwtTokenProvider,
     private val kakaoApiClient: KakaoApiClient,
     private val googleApiClient: GoogleApiClient,
+    private val appleApiClient: AppleApiClient,
     @Value("\${jwt.refresh-expiration-ms}") private val refreshExpirationMs: Long,
 ) {
 
@@ -77,6 +79,17 @@ class AuthService(
     @Transactional
     fun googleLogin(idToken: String): AuthTokens {
         return socialLogin(googleApiClient.fetchProfile(idToken))
+    }
+
+    /**
+     * Apple 로그인: 앱이 받은 identityToken을 서버가 직접 검증하고 우리 토큰을 발급한다.
+     * Apple 토큰에는 이름이 없으므로, 앱이 첫 로그인 때 받은 이름(nickname)을 함께 받아 가입에 쓴다.
+     * 이미 가입된 계정이면 nickname은 쓰지 않는다.
+     */
+    @Transactional
+    fun appleLogin(identityToken: String, rawNonce: String?, nickname: String?): AuthTokens {
+        val profile = appleApiClient.fetchProfile(identityToken, rawNonce)
+        return socialLogin(profile.copy(nickname = nickname?.trim()?.takeIf { it.isNotEmpty() }))
     }
 
     /**
@@ -123,6 +136,12 @@ class AuthService(
     @Transactional
     fun linkGoogle(memberId: Long, idToken: String) {
         link(memberId, googleApiClient.fetchProfile(idToken))
+    }
+
+    /** 로그인된 회원에게 Apple 로그인 수단을 연결한다. */
+    @Transactional
+    fun linkApple(memberId: Long, identityToken: String, rawNonce: String?) {
+        link(memberId, appleApiClient.fetchProfile(identityToken, rawNonce))
     }
 
     private fun link(memberId: Long, profile: OAuthProfile) {
