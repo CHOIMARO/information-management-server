@@ -26,7 +26,9 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
   만료 refresh는 매일 04시 @Scheduled 배치(RefreshTokenCleanupScheduler)가 정리한다.
 - SNS 로그인(카카오/구글): POST /auth/login/kakao·google에 앱이 받은 SNS 토큰을 보내면
   서버가 SNS API로 검증(Kakao/GoogleApiClient, member/infrastructure) 후 find-or-create + 우리 JWT 발급.
-  테스트는 클라이언트를 @MockitoBean으로 대체.
+  Apple 로그인(POST /auth/login/apple)은 물어볼 API가 없어서 AppleApiClient가 Apple 공개키(JWKS)로
+  identityToken을 직접 검증한다 (서명·iss·aud·exp·nonce). 허용 앱 ID는 APPLE_CLIENT_IDS(iOS 번들 ID), 비면 전부 거절.
+  테스트는 클라이언트를 @MockitoBean으로 대체 (AppleApiClient 자체는 테스트용 RSA 키로 단위 테스트).
 - 계정 연동: 회원(Member="사람")과 로그인 수단(AuthCredential="문", 1:N)이 분리되어 있다.
   연동 = POST /members/me/links/kakao·google (인증된 세션 + SNS 토큰 검증, 이메일 무관),
   해제 = DELETE /members/me/links/{provider} (마지막 수단은 409). 이메일 일치 자동 통합은
@@ -106,6 +108,7 @@ memo/
 - 새 클래스/인터페이스/의존성이 필요하면 구현 전에 사용자에게 확인받는다.
 - 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `./gradlew bootRun --args='--server.port=8081'`(compose의 db가 떠 있어야 함) 또는 `APP_PORT=8082 docker compose up -d`를 사용하고, 검증 후 반드시 종료한다.
 - API 수동 테스트 요청 모음: 프로젝트 루트 `memos.http`
+- 안드로이드 연동 가이드: `docs/android-api-guide.md`(동작 규칙) + `docs/openapi.json`(형식). API를 바꾸면 둘 다 갱신한다.
 - API 문서: springdoc이 컨트롤러·DTO에서 자동 생성한다. 로컬 `http://localhost:8080/swagger-ui.html`.
   설정은 `common/config/OpenApiConfig.kt` (공개 API 판정은 SecurityConfig의 permitAll과 맞춘다).
   메모 API는 문서에서 제외(`springdoc.paths-to-exclude`). 출시 전까지 EC2는 개발 서버라 Swagger를 켜 두고,

@@ -137,6 +137,7 @@ SPRINGDOC_SWAGGER_UI_ENABLED=false
 - 값에 따옴표를 붙이지 않는다. Docker는 따옴표까지 값으로 읽는다.
 - `export`를 붙이지 않는다. 이 파일은 셸 스크립트가 아니라 Docker 환경변수 파일이다.
 - API 문서(Swagger UI)는 개발용이다. 개발 서버에서는 `http://<서버 IP>/swagger-ui.html`, 로컬에서는 `http://localhost:8080/swagger-ui.html`로 연다.
+- iOS 앱의 Apple 로그인을 쓰려면 `APPLE_CLIENT_IDS=<iOS 번들 ID>` 줄을 추가한다. 없으면 Apple 로그인은 모두 거절된다.
 - Spring Boot는 `JWT_SECRET`을 `jwt.secret` 속성으로 읽는다 (relaxed binding: 대문자·밑줄 이름을 소문자·점 이름에 자동으로 맞춘다).
 - 주의: `JWT_SECRET`을 바꾸면 이미 발급된 토큰이 모두 무효가 된다. 사용자는 다시 로그인해야 한다.
 - 주의: S3 설정을 마치기 전에는 `TYPECAST_API_KEY` 줄을 비워 둔다. 키만 있으면 더빙 1건마다 크레딧을 여러 번 쓴다 (`docs/dubbing-todo.md` 2-1).

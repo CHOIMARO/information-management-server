@@ -88,6 +88,10 @@
 - **구현 방향**: 탈퇴 기능을 만들 때 아래를 함께 처리한다.
   1. 내 목소리 삭제 (Typecast 슬롯 해제 포함).
   2. 더빙 작업 행과 S3 파일 삭제.
+  3. Apple 로그인 수단이 있으면 Apple 연결을 철회한다 (`POST https://appleid.apple.com/auth/revoke`).
+     철회에는 Apple refresh 토큰이나 access 토큰이 필요하다. 탈퇴할 때 앱이 Apple 로그인을 한 번 더 받아 authorizationCode를 보내고,
+     서버가 `/auth/token`에서 토큰으로 바꾼 뒤 철회한다. `client_secret`은 Apple 개발자 계정의 비밀키(.p8)로 서명한 JWT다.
+- **필요한 이유**: Google Play와 App Store 모두 앱에서 계정을 만들 수 있으면 계정 삭제 기능을 요구한다.
 - **주의**: member 도메인이 dubbing 리포지토리를 직접 부르면 안 된다 (도메인 경계 규칙). Facade로 조합하거나, 회원 탈퇴 이벤트를 발행하고 dubbing이 구독하게 한다.
 
 ## 7. [기술 부채] OSIV(Open Session In View) 끄기 검토
@@ -102,3 +106,13 @@
 - **현재 상태**: Worker는 한 번에 한 작업만 처리한다. 작업 하나가 10초 걸리면 시간당 약 360건이다.
 - **구현 방향**: 대기열이 길어지면 Typecast 동시 요청 한도(Lite 5개) 안에서 처리 스레드를 늘린다. 작업 가져오기 쿼리가 `for update skip locked`를 쓰므로 여러 스레드나 여러 서버가 같은 작업을 중복 처리하지 않는다.
 - **추가 검토**: 완료를 앱에 알리는 푸시(FCM)를 붙이면 앱의 상태 조회(폴링) 횟수를 줄일 수 있다.
+
+## 9. [출시 전 필수] 로그인 보안 보완
+
+- **Apple nonce 필수화**: 지금은 `nonce`를 보내면 검증하고, 보내지 않으면 건너뛴다. iOS 앱이 nonce를 보내기 시작하면 필수로 바꾼다 (`AppleApiClient.fetchProfile`).
+- **카카오·구글 aud 검사**: 지금은 토큰이 진짜인지만 확인하고, 우리 앱을 위해 발급된 토큰인지는 확인하지 않는다.
+  그래서 다른 앱이 받은 사용자 토큰으로도 우리 서비스에 로그인할 수 있다.
+  - 구글: idToken의 `aud`가 우리 앱의 OAuth client ID와 같은지 확인한다. Apple처럼 공개키로 직접 검증하는 방식으로 바꿀 수 있다.
+  - 카카오: 토큰 정보 API(`/v1/user/access_token_info`)의 `app_id`가 우리 앱 ID와 같은지 확인한다.
+- **Apple 설정**: Apple Developer Program 가입, 번들 ID 등록, Sign in with Apple 기능 활성화. 서버 환경변수 `APPLE_CLIENT_IDS`에 번들 ID를 넣는다.
+
