@@ -190,7 +190,114 @@ curl -i http://<서버 IP>/voices
 
 ## 7. 새 버전 배포 (업데이트)
 
-main 브랜치에 push하면 CI가 테스트를 통과한 뒤 새 `latest` 이미지를 GHCR에 올린다. 그 다음 EC2에서 아래를 실행한다.
+main 브랜치에 push하면 CI가 테스트를 통과한 뒤 새 이미지(`latest`, `sha-<커밋 앞 7자리>`)를 GHCR에 올린다.
+7-1의 자동 배포를 설정하면 CI가 이어서 EC2의 컨테이너를 그 커밋의 이미지로 바꾼다. 설정하지 않았으면 배포 job은 건너뛴다.
+`v*` 태그 push는 이미지만 만들고 배포하지 않는다.
+
+### 7-1. 자동 배포 설정 (GitHub Actions → AWS SSM → EC2)
+
+**방식**: GitHub가 EC2에 SSH로 접속하지 않는다. CI가 AWS Systems Manager(SSM)의 Run Command로 명령을 보내고, EC2 안의 SSM 에이전트가 그 명령을 실행한다.
+
+- SSH(22) 포트를 GitHub에 열지 않아도 된다. 지금 SSH는 회사·집 IP만 허용하고, GitHub 러너의 IP는 정해져 있지 않다.
+- AWS 자격 증명은 **OIDC**로 받는다. GitHub가 실행마다 짧게 쓰는 토큰을 발급하고, AWS가 그 토큰을 확인한 뒤 역할을 빌려준다. 오래 쓰는 액세스 키를 GitHub에 저장하지 않는다.
+- 배포 순서: 이미지 받기 → 기존 컨테이너 삭제 → 새 컨테이너 실행 → `GET /dubbing-options`가 200을 줄 때까지 최대 3분 대기 → 안 쓰는 이미지 정리.
+  3분 안에 응답하지 않으면 컨테이너 로그를 Actions 로그에 남기고 job이 실패한다.
+
+**1. EC2 역할에 SSM 권한을 추가한다**
+
+1. IAM 콘솔 → **역할** → `magic-editor-ec2-role` → **권한 추가 → 정책 연결**.
+2. AWS 관리형 정책 `AmazonSSMManagedInstanceCore`를 고르고 연결한다.
+3. EC2에 접속해 SSM 에이전트를 다시 시작한다. Amazon Linux 2023에는 에이전트가 이미 설치되어 있다.
+
+   ```bash
+   sudo systemctl restart amazon-ssm-agent
+   ```
+4. Systems Manager 콘솔 → **Fleet Manager**에서 `magic-editor-server`가 **Online**인지 확인한다. 몇 분 걸릴 수 있다.
+
+**2. GitHub OIDC 공급자를 만든다 (계정에 한 번만)**
+
+IAM 콘솔 → **자격 증명 공급자** → **공급자 추가**:
+
+- 공급자 유형: OpenID Connect
+- 공급자 URL: `https://token.actions.githubusercontent.com`
+- 대상(Audience): `sts.amazonaws.com`
+
+**3. 배포용 역할을 만든다**
+
+IAM 콘솔 → **역할** → **역할 생성** → **사용자 지정 신뢰 정책**에 아래를 넣는다. 이름은 `magic-editor-github-deploy`로 한다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "arn:aws:iam::<계정 ID>:oidc-provider/token.actions.githubusercontent.com" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": "repo:CHOIMARO@53159069/information-management-server@1348034912:ref:refs/heads/main"
+        }
+      }
+    }
+  ]
+}
+```
+
+- `sub` 조건: 이 저장소의 **main 브랜치** 실행만 역할을 빌릴 수 있다. PR이나 다른 브랜치, 포크 저장소는 빌리지 못한다.
+- `sub` 값에 숫자(`@53159069`, `@1348034912`)가 붙는 이유: 이 저장소는 2026-07-15 이후에 만들어져 GitHub가 바뀌지 않는 id를 붙인 형식(immutable subject)으로 토큰을 준다.
+  이름만 쓴 형식(`repo:CHOIMARO/information-management-server:...`)으로 넣으면 `Not authorized to perform sts:AssumeRoleWithWebIdentity` 오류가 난다.
+- 확인 명령: `gh api repos/CHOIMARO/information-management-server/actions/oidc/customization/sub`의 `sub_claim_prefix`
+
+역할에 아래 인라인 정책을 추가한다. 이름은 `magic-editor-deploy-ssm`으로 한다.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SendDeployCommandToDevServer",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ec2:ap-northeast-2:<계정 ID>:instance/<인스턴스 ID>",
+        "arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript"
+      ]
+    },
+    {
+      "Sid": "ReadDeployCommandResult",
+      "Effect": "Allow",
+      "Action": "ssm:GetCommandInvocation",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+- 주의: `AWS-RunShellScript`는 EC2에서 어떤 명령이든 root로 실행할 수 있다. 그래서 대상 인스턴스를 개발 서버 하나로 제한하고, 신뢰 정책으로 main 브랜치만 허용한다.
+
+**4. GitHub 저장소 변수를 넣는다**
+
+저장소 **Settings → Secrets and variables → Actions → Variables**에 넣는다. 비밀 값이 아니라서 시크릿이 아닌 변수로 둔다.
+
+```bash
+gh variable set AWS_DEPLOY_ROLE_ARN --body "arn:aws:iam::<계정 ID>:role/magic-editor-github-deploy"
+gh variable set EC2_INSTANCE_ID --body "<인스턴스 ID, 예: i-0abc123def4567890>"
+```
+
+**5. 확인한다**
+
+1. main에 push하고 Actions 탭에서 `deploy-dev` job이 성공하는지 본다.
+2. `curl -i http://<서버 IP>/dubbing-options`가 200이면 배포된 것이다.
+3. 실패하면 job 로그에 EC2 스크립트의 출력과 컨테이너 로그가 있다.
+
+- 환경변수 파일 위치는 `/home/ec2-user/magic-editor.env`로 정해져 있다 (`ci.yml`의 `ENV_FILE`). 다른 곳에 두었으면 `ci.yml`을 고친다.
+- 환경변수 파일을 바꾼 뒤에는 새 커밋을 push하거나, 아래 수동 명령으로 컨테이너를 다시 만든다. 컨테이너는 만들 때의 파일 내용만 읽는다.
+
+### 7-2. 수동 배포와 되돌리기
+
+자동 배포를 설정하지 않았거나 특정 이미지로 되돌릴 때는 EC2에서 아래를 실행한다.
 
 ```bash
 docker pull ghcr.io/choimaro/information-management-server:latest

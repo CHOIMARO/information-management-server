@@ -16,6 +16,7 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
   앱까지 컨테이너로 돌리려면 `docker compose up -d --build` (호스트 포트는 `APP_PORT`로 변경 가능).
   테스트는 Testcontainers가 PostgreSQL 컨테이너를 자동으로 띄운다(jdbc:tc: URL) — **테스트 실행에 Docker 필요**.
   클라우드 DB(RDS) 전환 가이드는 `docs/rds-setup.md`, EC2(서울) 생성·Docker 배포 가이드는 `docs/ec2-setup.md`
+  (main push → CI가 테스트·이미지 빌드 후 AWS SSM Run Command로 개발 서버 컨테이너를 교체, OIDC 역할 사용, 설정은 7-1)
   (이미지는 amd64 전용 → t3 계열만, 컨테이너가 IAM 역할을 쓰려면 메타데이터 홉 제한 2).
 - 스키마는 Flyway가 관리한다 (`src/main/resources/db/migration/V*.sql`, `ddl-auto=validate`).
   스키마 변경 = 엔티티 수정 + 다음 번호의 새 V파일 추가. 이미 적용된 V파일은 절대 수정하지 않는다
