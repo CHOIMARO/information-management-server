@@ -126,11 +126,12 @@
 // 요청
 { "refreshToken": "0b6f1c3e-..." }
 
-// 응답 200: accessToken은 새 값, refreshToken은 요청과 같은 값
-{ "accessToken": "eyJhbGciOi...(새 값)", "refreshToken": "0b6f1c3e-..." }
+// 응답 200
+{ "accessToken": "eyJhbGciOi...(새 값)", "refreshToken": "7d2a9e41-...(바뀔 수 있음)" }
 ```
 
-오류: 401 `INVALID_REFRESH_TOKEN` (만료, 로그아웃됨, 탈퇴함, 위조) → 저장한 토큰을 지우고 비로그인 상태로 바꾼다.
+- **응답의 두 토큰을 항상 둘 다 저장한다.** `refreshToken`은 지금은 요청과 같은 값이다. 서버에 refresh 토큰 교체가 적용되면 매번 새 값이 온다. 이 규칙을 지키면 앱은 교체 전후 모두 그대로 동작한다.
+- 오류: 401 `INVALID_REFRESH_TOKEN` (만료, 로그아웃됨, 탈퇴함, 위조) → 저장한 토큰을 지우고 비로그인 상태로 바꾼다.
 
 ### 2-4. 로그아웃 `POST /auth/logout` (공개)
 
@@ -183,13 +184,20 @@
 | 토큰 | 수명 | 비고 |
 |---|---|---|
 | access | 1시간 | 모든 보호 API 요청에 붙인다. |
-| refresh | 로그인 시점부터 30일 | 재발급해도 **연장되지 않는다.** 30일이 지나면 다시 로그인해야 한다. |
+| refresh | 30일 | 지금은 로그인 시점부터 30일이고 재발급해도 연장되지 않는다. **교체 적용 후**에는 재발급할 때마다 새 토큰을 받고, 그때부터 다시 30일이다. 그러면 30일 안에 한 번이라도 앱을 쓰는 사용자는 다시 로그인하지 않는다. |
 
 1. 보호 API가 401을 돌려주면 access 토큰이 만료된 것으로 보고 `POST /auth/refresh`를 **한 번** 호출한다.
-2. 재발급에 성공하면 새 access 토큰을 저장하고 원래 요청을 다시 보낸다.
-3. 재발급이 401이면 저장한 토큰을 지우고 비로그인 상태로 바꾼다. 다음에 서버 기능 버튼을 누를 때 로그인 시트를 띄운다 (PRD 9.17).
+2. 재발급에 성공하면 **access와 refresh를 둘 다 저장한 뒤** 원래 요청을 다시 보낸다. 저장을 먼저 끝낸다. 저장 전에 앱이 꺼지면 서버가 이미 바꾼 새 refresh 토큰을 잃는다.
+3. 재발급 결과에 따라 다르게 처리한다.
+
+   | 재발급 결과 | 앱 동작 |
+   |---|---|
+   | 200 | 두 토큰 저장 → 원래 요청 재시도 |
+   | 401 `INVALID_REFRESH_TOKEN` | 저장한 토큰을 지우고 비로그인 상태로 바꾼다. 다음에 서버 기능 버튼을 누를 때 로그인 시트를 띄운다 (PRD 9.17). |
+   | 네트워크 오류, 5xx | **토큰을 지우지 않는다.** 요청만 실패로 처리한다. 응답만 유실됐어도 서버가 이전 refresh 토큰을 1분 동안 더 받아 주므로(교체 적용 후), 같은 토큰으로 다시 시도하면 된다. |
 4. **`/auth/**` 요청이 받은 401에는 재발급을 시도하지 않는다.** SNS 로그인 실패(`INVALID_SNS_TOKEN`)도 401이므로, 이 규칙이 없으면 로그인 실패를 토큰 만료로 오해하고 재발급을 무한히 반복한다.
-5. 여러 요청이 동시에 401을 받아도 재발급은 한 번만 한다. 재발급 중에는 다른 요청이 기다렸다가 새 토큰으로 다시 보낸다. (Ktor `Auth` 플러그인의 bearer 방식을 쓰면 이 처리를 플러그인이 맡는다. 4-2를 본다.)
+5. 여러 요청이 동시에 401을 받아도 재발급은 한 번만 한다. 재발급 중에는 다른 요청이 기다렸다가 새 토큰으로 다시 보낸다. 교체 적용 후에는 같은 refresh 토큰으로 재발급을 두 번 하면 두 번째가 실패할 수 있다. (Ktor `Auth` 플러그인의 bearer 방식을 쓰면 이 처리를 플러그인이 맡는다. 4-2를 본다.)
+6. 토큰을 로그에 남기지 않는다.
 
 ### 2-9. 계정 연동 (1차 앱에서는 쓰지 않음)
 
@@ -339,19 +347,64 @@ Typecast 무료 플랜에는 목소리 복제 슬롯이 없어서 지금은 등�
 
 | 위치 | 담당 |
 |---|---|
-| `commonMain` | 서버 호출(Ktor Client), 요청·응답 모델(kotlinx.serialization), 토큰 처리(2-6), 더빙 상태 조회 반복(3-4), Repository, ViewModel, 화면 |
+| `commonMain` | 서버 호출(Ktor Client), 요청·응답 모델(kotlinx.serialization), 토큰 처리(2-8), 더빙 상태 조회 반복(3-4), Repository, ViewModel, 화면 |
 | `androidMain` | 카카오·구글 로그인 SDK 호출, Media3 재생, HTTP 허용 설정 |
 | `iosMain` 또는 Swift 코드 | 카카오·구글·**Apple** 로그인 SDK 호출, nonce 해싱, AVPlayer 재생, HTTP 허용 설정 |
 
 - 로그인 SDK는 플랫폼마다 다르다. 공통 코드에는 "SNS 토큰을 받아 온다"는 인터페이스만 두고, 플랫폼 코드가 SDK를 호출해서 토큰 문자열을 돌려준다. 그 토큰으로 서버를 호출하는 것은 공통 코드다. (`expect`/`actual` 또는 인터페이스 주입)
-- 이렇게 나누면 토큰 처리 규칙(2-6)과 더빙 흐름(3절)을 한 번만 구현한다.
+- 이렇게 나누면 토큰 처리 규칙(2-8)과 더빙 흐름(3절)을 한 번만 구현한다.
 
 ### 4-2. 네트워크 (Ktor Client)
 
 - 엔진은 플랫폼별로 고른다. Android는 OkHttp 엔진, iOS는 Darwin 엔진을 쓴다. 클라이언트 설정 코드는 공통이다.
-- 토큰 처리(2-6)는 `Auth` 플러그인의 bearer 방식으로 구현한다. 401 → 재발급 → 원래 요청 재시도, 그리고 동시에 여러 요청이 401을 받아도 재발급을 한 번만 하는 처리를 플러그인이 맡는다. 다음 두 가지는 직접 설정한다.
-  1. **토큰은 API 서버로 가는 요청에만 붙인다.** `sendWithoutRequest`에서 요청 주소가 API 서버일 때만 `true`를 돌려준다. presigned URL(S3)에 토큰이 붙으면 S3가 거절한다 (3-5).
-  2. **`/auth/**` 요청의 401에는 재발급하지 않는다.** `refreshTokens` 안에서 원래 요청 경로가 `/auth/`로 시작하면 재발급하지 않고 `null`을 돌려준다 (2-6의 4번).
+- 토큰 처리(2-8)는 `Auth` 플러그인의 bearer 방식으로 구현한다 (Ktor 3.6.1 기준). 401 → 재발급 → 원래 요청 재시도, 그리고 동시에 여러 요청이 401을 받아도 재발급을 한 번만 하는 처리를 플러그인이 맡는다. 다음은 직접 설정한다.
+  1. **API용 `HttpClient`는 앱 전체에 하나만 둔다** (DI 싱글톤). 재발급을 한 번으로 묶는 처리는 같은 클라이언트 안에서만 동작한다.
+  2. **`nonCancellableRefresh = true`로 둔다.** 화면을 떠나 코루틴이 취소돼도 재발급을 끝까지 마친다. 그렇지 않으면 서버는 토큰을 바꿨는데 앱은 새 토큰을 저장하지 못할 수 있다.
+  3. **토큰은 API 서버로 가는 요청에만 붙인다.** `sendWithoutRequest`에서 요청 주소가 API 서버일 때만 `true`를 돌려준다. presigned URL(S3)에 토큰이 붙으면 S3가 거절한다 (3-5).
+  4. **`/auth/**` 요청의 401에는 재발급하지 않는다** (2-8의 4번). `reAuthorizeOnResponse`로 재발급 대상에서 뺀다.
+  5. **토큰이 바뀌는 순간에는 플러그인의 토큰 캐시를 비운다.** 대상은 로그인, 로그아웃, 탈퇴, 재발급 401이다. `client.authProvider<BearerAuthProvider>()?.clearToken()`을 호출한다. 비우지 않으면 지운 토큰을 계속 보낸다. 재발급 블록 안에서는 부르지 않고, 블록이 끝난 뒤 `AuthRepository` 등에서 부른다.
+
+```kotlin
+val apiClient = HttpClient(engine) {
+    install(ContentNegotiation) { json() }
+    install(Auth) {
+        // /auth/** 의 401은 재발급 대상이 아니다 (2-8의 4번)
+        reAuthorizeOnResponse { response ->
+            response.status == HttpStatusCode.Unauthorized &&
+                !response.request.url.encodedPath.startsWith("/auth/")
+        }
+        bearer {
+            nonCancellableRefresh = true
+            sendWithoutRequest { it.url.host == apiHost }   // S3 주소에는 토큰을 붙이지 않는다
+            loadTokens { tokenStore.read()?.let { BearerTokens(it.access, it.refresh) } }
+            refreshTokens {
+                val refresh = oldTokens?.refreshToken ?: return@refreshTokens null
+                val response = runCatching {
+                    client.post("$baseUrl/auth/refresh") {
+                        markAsRefreshTokenRequest()         // 재발급 요청 자체는 인증 처리에서 뺀다
+                        contentType(ContentType.Application.Json)
+                        setBody(RefreshTokenRequest(refresh))
+                    }
+                }.getOrElse { return@refreshTokens null }   // 네트워크 오류: 토큰을 지우지 않는다
+
+                when (response.status) {
+                    HttpStatusCode.OK -> {
+                        val tokens = response.body<TokenResponse>()
+                        tokenStore.save(tokens.accessToken, tokens.refreshToken)   // 두 토큰을 먼저 저장
+                        BearerTokens(tokens.accessToken, tokens.refreshToken)
+                    }
+                    HttpStatusCode.Unauthorized -> {
+                        tokenStore.clear()
+                        authEvents.emit(AuthEvent.SessionExpired)   // 받는 쪽에서 clearToken() 후 비로그인 상태로
+                        null
+                    }
+                    else -> null                            // 5xx: 토큰을 지우지 않는다
+                }
+            }
+        }
+    }
+}
+```
 - 내 목소리 등록(3-8)은 응답이 늦을 수 있다. 이 요청에만 `HttpTimeout`을 60초 이상으로 둔다.
 
 ### 4-3. 서버 주소와 HTTP 허용 (debug 빌드만)
