@@ -35,3 +35,6 @@ build/
 
 # H2 파일 DB (로컬 데이터라 저장소에 두지 않는다)
 data/
+
+# Android SDK 경로. IDE가 자동으로 만든다. 이 서버 프로젝트의 빌드에는 쓰지 않는다
+local.properties
