@@ -155,7 +155,8 @@ SPRINGDOC_SWAGGER_UI_ENABLED=false
   - `GOOGLE_CLIENT_IDS`는 Android·iOS 클라이언트 ID가 아니라 **Web 클라이언트 ID**다. 앱이 이 값을 serverClientId로 넘기면 idToken의 aud가 이 값이 된다.
   - `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`, `TOKEN_ENCRYPTION_KEY`가 없으면 Apple 로그인은 되지만, 탈퇴할 때 Apple 토큰을 취소하지 못한다 (App Store 심사 요구 사항).
   - 주의: `TOKEN_ENCRYPTION_KEY`를 바꾸면 이미 저장한 Apple 토큰을 읽을 수 없다. 한 번 정하면 바꾸지 않는다.
-- Spring Boot는 `JWT_SECRET`을 `jwt.secret` 속성으로 읽는다 (relaxed binding: 대문자·밑줄 이름을 소문자·점 이름에 자동으로 맞춘다).
+- `JWT_SECRET`은 필수다. `application.properties`의 `jwt.secret=${JWT_SECRET}`가 이 값을 읽는다.
+  기본값이 없으므로 이 줄이 빠지면 서버가 시작하지 않는다. 공개된 개발용 키로 서버가 뜨는 사고를 막기 위해서다.
 - 주의: `JWT_SECRET`을 바꾸면 이미 발급된 토큰이 모두 무효가 된다. 사용자는 다시 로그인해야 한다.
 - 주의: S3 설정을 마치기 전에는 `TYPECAST_API_KEY` 줄을 비워 둔다. 키만 있으면 더빙 1건마다 크레딧을 여러 번 쓴다 (`docs/dubbing-todo.md` 2-1).
 

@@ -20,6 +20,11 @@ class JwtTokenProvider(
     @Value("\${jwt.access-expiration-ms}") private val expirationMs: Long,
 ) {
 
+    init {
+        // compose처럼 빈 값을 넘기는 실행 환경에서도 원인이 드러나는 메시지로 시작을 멈춘다
+        require(secret.isNotBlank()) { "jwt.secret(JWT_SECRET)이 비어 있습니다. 32바이트 이상의 임의 문자열을 넣으세요: openssl rand -base64 48" }
+    }
+
     private val key: SecretKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
 
     /** 회원 id를 담은 서명된 토큰을 발급한다. */

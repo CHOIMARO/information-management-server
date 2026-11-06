@@ -32,6 +32,9 @@ services:
       # 컨테이너 안에서 db는 localhost가 아니라 서비스 이름(db)으로 접근한다 (compose 내부 DNS)
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/memodb
       TZ: Asia/Seoul
+      # JWT 서명 키: 필수. 없으면 앱이 시작하지 않는다. 예: JWT_SECRET=$(openssl rand -base64 48) docker compose up -d
+      # ':?'(없으면 오류) 대신 빈 값을 넘긴다. ':?'는 'docker compose up -d db'까지 막기 때문이다.
+      JWT_SECRET: ${JWT_SECRET:-}
       # 더빙: 호스트 셸의 환경변수를 그대로 넘긴다 (없으면 빈 값 → 더빙만 동작하지 않음)
       TYPECAST_API_KEY: ${TYPECAST_API_KEY:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}

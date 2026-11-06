@@ -12,6 +12,7 @@ Kotlin + Spring Boot 백엔드 학습 프로젝트. 사용자는 안드로이드
 
 - Kotlin 2.3 / Spring Boot 4.1 / Java 21 toolchain (foojay resolver가 JDK 자동 프로비저닝)
 - 빌드: `./gradlew build`, 실행: `./gradlew bootRun`
+  (실행에는 환경변수 `JWT_SECRET`(32바이트 이상)이 필수. 기본값이 없어 빠지면 서버가 시작하지 않는다. 테스트는 test용 properties의 키를 쓴다)
 - DB: PostgreSQL 17. 로컬 개발은 `docker compose up -d db`(루트 compose.yaml, localhost:5432),
   앱까지 컨테이너로 돌리려면 `docker compose up -d --build` (호스트 포트는 `APP_PORT`로 변경 가능).
   테스트는 Testcontainers가 PostgreSQL 컨테이너를 자동으로 띄운다(jdbc:tc: URL) — **테스트 실행에 Docker 필요**.
@@ -117,7 +118,7 @@ memo/
 ## 작업 규칙
 
 - 새 클래스/인터페이스/의존성이 필요하면 구현 전에 사용자에게 확인받는다.
-- 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `./gradlew bootRun --args='--server.port=8081'`(compose의 db가 떠 있어야 함) 또는 `APP_PORT=8082 docker compose up -d`를 사용하고, 검증 후 반드시 종료한다.
+- 서버 검증 시 사용자가 IntelliJ에서 8080으로 서버를 띄워둔 경우가 많다. Claude가 검증용 서버를 띄울 때는 `JWT_SECRET=$(openssl rand -base64 48) ./gradlew bootRun --args='--server.port=8081'`(compose의 db가 떠 있어야 함) 또는 `JWT_SECRET=$(openssl rand -base64 48) APP_PORT=8082 docker compose up -d`를 사용하고, 검증 후 반드시 종료한다.
 - API 수동 테스트 요청 모음: 프로젝트 루트 `memos.http`
 - 앱(CMP: Android·iOS) 연동 가이드: `docs/app-api-guide.md`(동작 규칙) + `docs/openapi.json`(형식). API를 바꾸면 둘 다 갱신한다.
 - API 문서: springdoc이 컨트롤러·DTO에서 자동 생성한다. 로컬 `http://localhost:8080/swagger-ui.html`.
